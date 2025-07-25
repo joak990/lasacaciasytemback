@@ -45,8 +45,5 @@
     "@types/aws-lambda": "^8.10.152",
     "nodemon": "^3.0.2",
     "prisma": "^5.7.1"
-  },
-  "engines": {
-    "node": "18.x"
   }
 }
