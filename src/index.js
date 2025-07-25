@@ -15,7 +15,7 @@ app.use(cors({
     'https://lasacaciasistemafront.vercel.app' // <--- Agrega aquí tu dominio de Vercel
   ],
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
