@@ -1,0 +1,142 @@
+// Esquema completo para cabañas, reservas, servicios y usuarios
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CabinStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  RESERVED
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  DEPOSIT
+  OTHER
+}
+
+enum ServiceCategory {
+  FOOD
+  BEVERAGE
+  ACTIVITY
+  TRANSPORT
+  CLEANING
+  OTHER
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+model Cabin {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  capacity    Int
+  price       Float
+  status      CabinStatus @default(AVAILABLE)
+  amenities   String[]
+  imageUrl    String?
+  reservations Reservation[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt @default(now())
+}
+
+model Payment {
+  id            String      @id @default(uuid())
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+  reservationId String
+  amount        Float
+  method        String
+  note          String?
+  createdAt     DateTime    @default(now())
+}
+
+model Reservation {
+  id              String             @id @default(uuid())
+  guestName       String
+  guestLastName   String
+  guestPhone      String
+  guestEmail      String?
+  guestCount      Int
+  checkIn         DateTime
+  checkOut        DateTime
+  checkInDone  Boolean  @default(false)
+  checkOutDone Boolean  @default(false)
+  totalPrice      Float
+  status          ReservationStatus @default(PENDING)
+  specialRequests String?
+  paymentStatus   PaymentStatus     @default(PENDING)
+  amountPaid      Float             @default(0)
+  paymentMethod   PaymentMethod?
+  paymentNotes    String?
+  payments        Payment[]
+  cabin           Cabin             @relation(fields: [cabinId], references: [id])
+  cabinId         String
+  reservationServices ReservationService[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt @default(now())
+  user            User?             @relation(fields: [userId], references: [id])
+  userId          String?
+}
+
+model Service {
+  id          String               @id @default(uuid())
+  name        String
+  description String?
+  price       Float
+  category    ServiceCategory
+  isActive    Boolean              @default(true)
+  reservationServices ReservationService[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt @default(now())
+}
+
+model ReservationService {
+  id            String     @id @default(uuid())
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+  reservationId String
+  service       Service     @relation(fields: [serviceId], references: [id])
+  serviceId     String
+  quantity      Int
+  price         Float
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt @default(now())
+}
+
+model User {
+  id          String        @id @default(uuid())
+  email       String        @unique
+  password    String
+  name        String
+  lastName    String
+  phone       String?
+  role        UserRole      @default(USER)
+  reservations Reservation[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt @default(now())
+} 
