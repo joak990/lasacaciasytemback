@@ -15,7 +15,8 @@
     "db:insert-cabins": "node database/insert_cabins_prisma.js",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
-    "docker:build": "docker-compose build"
+    "docker:build": "docker-compose build",
+    "build": "prisma generate"
   },
   "keywords": [
     "cabañas",
