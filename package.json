@@ -26,6 +26,9 @@
   ],
   "author": "",
   "license": "MIT",
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
     "@nestjs/core": "^11.1.5",
     "@prisma/client": "^5.7.1",
