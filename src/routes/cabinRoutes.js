@@ -74,7 +74,7 @@ router.get('/available', async (req, res) => {
     // Obtener todas las cabañas activas
     const allCabins = await prisma.cabin.findMany({
       where: {
-        status: 'ACTIVE'
+        status: 'AVAILABLE'
       },
       select: {
         id: true,
