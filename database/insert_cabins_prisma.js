@@ -15,7 +15,7 @@ async function insertCabins() {
         price: 35000.00,
         status: 'AVAILABLE',
         amenities: ['WiFi', 'Cocina completa', 'Terraza', 'Estacionamiento', 'Vista al lago'],
-        imageUrl: 'https://example.com/turquesa.jpg'
+        images: []
       },
       {
         id: 'cabin-maiz',
@@ -25,7 +25,7 @@ async function insertCabins() {
         price: 40000.00,
         status: 'AVAILABLE',
         amenities: ['WiFi', 'Cocina completa', 'Terraza', 'Estacionamiento', 'Juegos de mesa'],
-        imageUrl: 'https://example.com/maiz.jpg'
+        images: []
       },
       {
         id: 'cabin-perla',
@@ -35,7 +35,7 @@ async function insertCabins() {
         price: 20000.00,
         status: 'AVAILABLE',
         amenities: ['WiFi', 'Cocina completa', 'Terraza', 'Chimenea'],
-        imageUrl: 'https://example.com/perla.jpg'
+        images: []
       },
       {
         id: 'cabin-rosa',
@@ -45,7 +45,7 @@ async function insertCabins() {
         price: 20000.00,
         status: 'AVAILABLE',
         amenities: ['WiFi', 'Cocina completa', 'Terraza', 'Jardín'],
-        imageUrl: 'https://example.com/rosa.jpg'
+        images: []
       },
       {
         id: 'cabin-beige',
@@ -55,7 +55,7 @@ async function insertCabins() {
         price: 40000.00,
         status: 'AVAILABLE',
         amenities: ['WiFi', 'Cocina completa', 'Terraza', 'Estacionamiento', 'Jacuzzi'],
-        imageUrl: 'https://example.com/beige.jpg'
+        images: []
       }
     ];
 
