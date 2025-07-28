@@ -310,7 +310,14 @@ router.post('/', [
 
     // Verificar que la cabaña existe
     const cabin = await prisma.cabin.findUnique({
-      where: { id: cabinId }
+      where: { id: cabinId },
+      select: {
+        id: true,
+        name: true,
+        capacity: true,
+        price: true,
+        status: true
+      }
     });
 
     if (!cabin) {
