@@ -340,7 +340,7 @@ router.post('/', [
         amountPaid: parseFloat(amountPaid),
         paymentMethod,
         status: 'PENDING',
-        channel
+        channel: channel
       },
       include: {
         cabin: {
