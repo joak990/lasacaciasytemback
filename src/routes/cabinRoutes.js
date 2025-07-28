@@ -16,51 +16,26 @@ const handleValidationErrors = (req, res, next) => {
 // GET /api/cabins - Obtener todas las cabañas
 router.get('/', async (req, res) => {
   try {
-    const { status, minPrice, maxPrice, capacity } = req.query;
-    
-    const where = {};
-    
-    if (status) {
-      where.status = status;
-    }
-    
-    if (minPrice || maxPrice) {
-      where.price = {};
-      if (minPrice) where.price.gte = parseFloat(minPrice);
-      if (maxPrice) where.price.lte = parseFloat(maxPrice);
-    }
-    
-    if (capacity) {
-      where.capacity = {
-        gte: parseInt(capacity)
-      };
-    }
-
+    // Consulta simple sin includes ni filtros para diagnosticar
     const cabins = await prisma.cabin.findMany({
-      where,
-      include: {
-        reservations: {
-          where: {
-            status: {
-              in: ['PENDING', 'CONFIRMED']
-            }
-          },
-          select: {
-            checkIn: true,
-            checkOut: true,
-            status: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: 'desc'
+      select: {
+        id: true,
+        name: true,
+        capacity: true,
+        price: true,
+        status: true,
+        createdAt: true
       }
     });
 
+    console.log('✅ Cabins found:', cabins.length);
     res.json(cabins);
   } catch (error) {
-    console.error('Error fetching cabins:', error);
-    res.status(500).json({ error: 'Error al obtener cabañas' });
+    console.error('❌ Error fetching cabins:', error);
+    res.status(500).json({ 
+      error: 'Error al obtener cabañas', 
+      details: error.message 
+    });
   }
 });
 
