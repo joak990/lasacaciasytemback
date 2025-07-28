@@ -81,8 +81,7 @@ router.get('/available', async (req, res) => {
         name: true,
         capacity: true,
         price: true,
-        status: true,
-        images: true
+        status: true
       }
     });
 
