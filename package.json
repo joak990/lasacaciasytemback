@@ -35,6 +35,7 @@
     "@prisma/client": "^5.7.1",
     "@vendia/serverless-express": "^4.12.6",
     "aws-lambda": "^1.0.7",
+    "axios": "^1.11.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -43,7 +44,9 @@
     "express-validator": "^7.0.1",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
-    "multer": "^2.0.0"
+    "multer": "^2.0.0",
+    "nodemailer": "^7.0.5",
+    "twilio": "^5.8.0"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.152",

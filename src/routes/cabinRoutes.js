@@ -106,6 +106,134 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// POST /api/cabins/:id/images - Agregar imágenes a una cabaña
+router.post('/:id/images', [
+  body('images').isArray().withMessage('Images debe ser un array'),
+  body('images.*').isURL().withMessage('Cada imagen debe ser una URL válida'),
+  handleValidationErrors
+], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { images } = req.body;
+
+    const cabin = await prisma.cabin.findUnique({
+      where: { id }
+    });
+
+    if (!cabin) {
+      return res.status(404).json({ error: 'Cabaña no encontrada' });
+    }
+
+    // Agregar nuevas imágenes al array existente
+    const updatedCabin = await prisma.cabin.update({
+      where: { id },
+      data: {
+        images: {
+          push: images
+        }
+      }
+    });
+
+    res.json({
+      message: 'Imágenes agregadas exitosamente',
+      cabin: updatedCabin
+    });
+  } catch (error) {
+    console.error('Error adding images:', error);
+    res.status(500).json({ error: 'Error al agregar imágenes' });
+  }
+});
+
+// GET /api/cabins/:id/images - Obtener imágenes de una cabaña
+router.get('/:id/images', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const cabin = await prisma.cabin.findUnique({
+      where: { id },
+      select: { images: true }
+    });
+
+    if (!cabin) {
+      return res.status(404).json({ error: 'Cabaña no encontrada' });
+    }
+
+    res.json({ images: cabin.images });
+  } catch (error) {
+    console.error('Error getting images:', error);
+    res.status(500).json({ error: 'Error al obtener imágenes' });
+  }
+});
+
+// DELETE /api/cabins/:id/images/:imageIndex - Eliminar imagen específica
+router.delete('/:id/images/:imageIndex', async (req, res) => {
+  try {
+    const { id, imageIndex } = req.params;
+    const index = parseInt(imageIndex);
+
+    const cabin = await prisma.cabin.findUnique({
+      where: { id }
+    });
+
+    if (!cabin) {
+      return res.status(404).json({ error: 'Cabaña no encontrada' });
+    }
+
+    if (index < 0 || index >= cabin.images.length) {
+      return res.status(400).json({ error: 'Índice de imagen inválido' });
+    }
+
+    // Remover la imagen del array
+    const updatedImages = cabin.images.filter((_, i) => i !== index);
+    
+    const updatedCabin = await prisma.cabin.update({
+      where: { id },
+      data: { images: updatedImages }
+    });
+
+    res.json({
+      message: 'Imagen eliminada exitosamente',
+      cabin: updatedCabin
+    });
+  } catch (error) {
+    console.error('Error deleting image:', error);
+    res.status(500).json({ error: 'Error al eliminar imagen' });
+  }
+});
+
+// PUT /api/cabins/:id/images - Reemplazar todas las imágenes
+router.put('/:id/images', [
+  body('images').isArray().withMessage('Images debe ser un array'),
+  body('images.*').isURL().withMessage('Cada imagen debe ser una URL válida'),
+  handleValidationErrors
+], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { images } = req.body;
+
+    const cabin = await prisma.cabin.findUnique({
+      where: { id }
+    });
+
+    if (!cabin) {
+      return res.status(404).json({ error: 'Cabaña no encontrada' });
+    }
+
+    const updatedCabin = await prisma.cabin.update({
+      where: { id },
+      data: { images }
+    });
+
+    res.json({
+      message: 'Imágenes actualizadas exitosamente',
+      cabin: updatedCabin
+    });
+  } catch (error) {
+    console.error('Error updating images:', error);
+    res.status(500).json({ error: 'Error al actualizar imágenes' });
+  }
+});
+
 // POST /api/cabins - Crear nueva cabaña (solo admin)
 router.post('/', [
   body('name').notEmpty().trim(),
@@ -114,10 +242,11 @@ router.post('/', [
   body('price').isFloat({ min: 0 }),
   body('status').optional().isIn(['AVAILABLE', 'OCCUPIED', 'MAINTENANCE', 'RESERVED']),
   body('amenities').optional().isArray(),
+  body('images').optional().isArray(),
   handleValidationErrors
 ], async (req, res) => {
   try {
-    const { name, description, capacity, price, status, amenities, imageUrl } = req.body;
+    const { name, description, capacity, price, status, amenities, images } = req.body;
 
     const cabin = await prisma.cabin.create({
       data: {
@@ -127,13 +256,13 @@ router.post('/', [
         price: parseFloat(price),
         status: status || 'AVAILABLE',
         amenities: amenities || [],
-        imageUrl
+        images: images || []
       }
     });
 
     res.status(201).json({
       message: 'Cabaña creada exitosamente',
-      cabin
+      cabin 
     });
   } catch (error) {
     console.error('Error creating cabin:', error);
@@ -149,11 +278,12 @@ router.put('/:id', [
   body('price').optional().isFloat({ min: 0 }),
   body('status').optional().isIn(['AVAILABLE', 'OCCUPIED', 'MAINTENANCE', 'RESERVED']),
   body('amenities').optional().isArray(),
+  body('images').optional().isArray(),
   handleValidationErrors
 ], async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, capacity, price, status, amenities, imageUrl } = req.body;
+    const { name, description, capacity, price, status, amenities, images } = req.body;
 
     const updateData = {};
     if (name) updateData.name = name;
@@ -162,7 +292,7 @@ router.put('/:id', [
     if (price) updateData.price = parseFloat(price);
     if (status) updateData.status = status;
     if (amenities) updateData.amenities = amenities;
-    if (imageUrl) updateData.imageUrl = imageUrl;
+    if (images) updateData.images = images;
 
     const updatedCabin = await prisma.cabin.update({
       where: { id },

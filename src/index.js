@@ -31,13 +31,13 @@ app.get('/', (req, res) => {
 });
 
 // Import routes
-const userRoutes = require('./routes/userRoutes');
+const authRoutes = require('./routes/userRoutes');
 const cabinRoutes = require('./routes/cabinRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
 const reservationRoutes = require('./routes/reservationRoutes');
 
 // Use routes
-app.use('/api/users', userRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/cabins', cabinRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/reservations', reservationRoutes);

@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, validationResult, query } = require('express-validator');
 const prisma = require('../utils/prisma');
+const notificationService = require('../services/notificationService');
 
 const router = express.Router();
 
@@ -275,84 +276,49 @@ router.get('/:id', async (req, res) => {
 
 // POST /api/reservations - Crear nueva reservación
 router.post('/', [
-  (req, res, next) => {
-    console.log('🔍 Middleware de validación - Datos recibidos:', req.body);
-    next();
-  },
-  body('cabinId').notEmpty(),
-  body('checkIn').isISO8601(),
-  body('checkOut').isISO8601(),
-  body('guestCount').isInt({ min: 1 }),
-  body('guestName').notEmpty().trim(),
-  body('guestLastName').notEmpty().trim(),
-  body('guestEmail').optional().custom((value) => {
-    if (value && value.trim() !== '') {
-      // Si hay un valor, debe ser un email válido
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(value)) {
-        throw new Error('Email debe ser válido');
-      }
-    }
-    return true;
-  }),
-  body('guestPhone').notEmpty().trim(),
-  body('totalPrice').isFloat({ min: 0 }),
-  body('amountPaid').optional().isFloat({ min: 0 }),
-  body('paymentMethod').optional().isIn(['CASH', 'CARD', 'TRANSFER', 'DEPOSIT', 'OTHER']),
+  body('cabinId').notEmpty().withMessage('ID de cabaña es requerido'),
+  body('checkIn').isISO8601().withMessage('Fecha de check-in debe ser válida'),
+  body('checkOut').isISO8601().withMessage('Fecha de check-out debe ser válida'),
+  body('totalPrice').isFloat({ min: 0 }).withMessage('Precio total debe ser un número válido'),
+  body('guestCount').isInt({ min: 1 }).withMessage('Número de huéspedes debe ser un entero válido'),
+  body('guestName').notEmpty().trim().withMessage('Nombre del huésped es requerido'),
+  body('guestLastName').notEmpty().trim().withMessage('Apellido del huésped es requerido'),
+  body('guestPhone').notEmpty().trim().withMessage('Teléfono del huésped es requerido'),
+  body('guestEmail').optional().isEmail().withMessage('Email debe ser válido'),
+  body('amountPaid').optional().isFloat({ min: 0 }).withMessage('Monto pagado debe ser un número válido'),
+  body('paymentMethod').optional().isIn(['CASH', 'CARD', 'TRANSFER', 'DEPOSIT', 'OTHER']).withMessage('Método de pago inválido'),
+  body('channel').optional().isIn(['PLATFORM', 'CALENDAR']).withMessage('Canal inválido'),
   handleValidationErrors
 ], async (req, res) => {
   try {
-    console.log('🔍 Backend recibiendo datos:', req.body);
-    
-    const { 
-      cabinId, 
-      checkIn, 
-      checkOut, 
-      guestCount, 
+    const {
+      cabinId,
+      checkIn,
+      checkOut,
+      totalPrice,
+      guestCount,
       guestName,
       guestLastName,
-      guestEmail,
       guestPhone,
-      totalPrice,
+      guestEmail,
       amountPaid = 0,
-      paymentMethod = 'TRANSFER'
+      paymentMethod = 'TRANSFER',
+      channel = 'CALENDAR'
     } = req.body;
 
-    // Procesar fechas de forma segura para evitar problemas de zona horaria
-    const checkInDate = new Date(checkIn + 'T00:00:00');
-    const checkOutDate = new Date(checkOut + 'T00:00:00');
-    
-    console.log('🔍 Debug - Fechas procesadas:');
-    console.log('  - checkIn original:', checkIn);
-    console.log('  - checkInDate procesada:', checkInDate);
-    console.log('  - checkOut original:', checkOut);
-    console.log('  - checkOutDate procesada:', checkOutDate);
-
-    // Obtener fecha actual sin hora (solo fecha)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    console.log('🔍 Backend recibiendo datos:', req.body);
 
     // Validar fechas
+    const checkInDate = new Date(checkIn);
+    const checkOutDate = new Date(checkOut);
+
     if (checkInDate >= checkOutDate) {
       return res.status(400).json({ 
         error: 'La fecha de check-out debe ser posterior al check-in' 
       });
     }
 
-    // Normalizar checkInDate para comparar solo fechas
-    const checkInDateOnly = new Date(checkInDate);
-    checkInDateOnly.setHours(0, 0, 0, 0);
-
-    if (checkInDateOnly < today) {
-      console.log('❌ Create reservation - Check-in in past');
-      console.log('🔍 Debug - Today:', today);
-      console.log('🔍 Debug - CheckInDateOnly:', checkInDateOnly);
-      return res.status(400).json({ 
-        error: 'La fecha de check-in no puede ser en el pasado' 
-      });
-    }
-
-    // Verificar disponibilidad de la cabaña
+    // Verificar disponibilidad
     const conflictingReservation = await prisma.reservation.findFirst({
       where: {
         cabinId,
@@ -412,40 +378,42 @@ router.post('/', [
         paymentStatus: 'PENDING',
         amountPaid: parseFloat(amountPaid),
         paymentMethod,
-        status: 'PENDING'
+        status: 'PENDING',
+        channel
       },
       include: {
         cabin: {
           select: {
             id: true,
             name: true,
+            capacity: true,
             price: true
           }
         }
       }
     });
 
-    // Obtener la reservación completa
-    const completeReservation = await prisma.reservation.findUnique({
-      where: { id: reservation.id },
-      include: {
-        cabin: {
-          select: {
-            id: true,
-            name: true,
-            price: true
-          }
-        }
+    console.log('✅ Reservación creada:', reservation.id);
+
+    // Enviar notificaciones si la reserva viene de la plataforma
+    if (channel === 'PLATFORM') {
+      try {
+        const notificationResult = await notificationService.notifyNewPlatformReservation(reservation, cabin);
+        console.log('🔔 Notificaciones enviadas:', notificationResult);
+      } catch (notificationError) {
+        console.error('❌ Error enviando notificaciones:', notificationError);
+        // No fallar la creación de la reserva por errores de notificación
       }
-    });
+    }
 
     res.status(201).json({
       message: 'Reservación creada exitosamente',
-      reservation: completeReservation
+      reservation
     });
+
   } catch (error) {
-    console.error('Error creating reservation:', error);
-    res.status(500).json({ error: 'Error al crear reservación' });
+    console.error('❌ Error creating reservation:', error);
+    res.status(500).json({ error: 'Error al crear la reservación' });
   }
 });
 
