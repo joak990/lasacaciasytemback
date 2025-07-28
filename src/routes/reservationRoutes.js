@@ -241,7 +241,6 @@ router.post('/', [
   body('guestEmail').optional().isEmail().withMessage('Email debe ser válido'),
   body('amountPaid').optional().isFloat({ min: 0 }).withMessage('Monto pagado debe ser un número válido'),
   body('paymentMethod').optional().isIn(['CASH', 'CARD', 'TRANSFER', 'DEPOSIT', 'OTHER']).withMessage('Método de pago inválido'),
-  body('channel').optional().isIn(['PLATFORM', 'CALENDAR']).withMessage('Canal inválido'),
   handleValidationErrors
 ], async (req, res) => {
   try {
@@ -256,8 +255,7 @@ router.post('/', [
       guestPhone,
       guestEmail,
       amountPaid = 0,
-      paymentMethod = 'TRANSFER',
-      channel = 'CALENDAR'
+      paymentMethod = 'TRANSFER'
     } = req.body;
 
     console.log('🔍 Backend recibiendo datos:', req.body);
@@ -339,8 +337,7 @@ router.post('/', [
         paymentStatus: 'PENDING',
         amountPaid: parseFloat(amountPaid),
         paymentMethod,
-        status: 'PENDING',
-        channel: channel
+        status: 'PENDING'
       },
       include: {
         cabin: {
@@ -355,17 +352,6 @@ router.post('/', [
     });
 
     console.log('✅ Reservación creada:', reservation.id);
-
-    // Enviar notificaciones si la reserva viene de la plataforma
-    if (channel === 'PLATFORM') {
-      try {
-        const notificationResult = await notificationService.notifyNewPlatformReservation(reservation, cabin);
-        console.log('🔔 Notificaciones enviadas:', notificationResult);
-      } catch (notificationError) {
-        console.error('❌ Error enviando notificaciones:', notificationError);
-        // No fallar la creación de la reserva por errores de notificación
-      }
-    }
 
     res.status(201).json({
       message: 'Reservación creada exitosamente',
