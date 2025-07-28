@@ -244,6 +244,8 @@ router.post('/', [
   handleValidationErrors
 ], async (req, res) => {
   try {
+    console.log('🔍 Iniciando creación de reservación...');
+    
     const {
       cabinId,
       checkIn,
@@ -258,19 +260,59 @@ router.post('/', [
       paymentMethod = 'TRANSFER'
     } = req.body;
 
-    console.log('🔍 Backend recibiendo datos:', req.body);
+    console.log('🔍 Datos parseados:', {
+      cabinId,
+      checkIn,
+      checkOut,
+      totalPrice,
+      guestCount,
+      guestName,
+      guestLastName,
+      guestPhone,
+      guestEmail,
+      amountPaid,
+      paymentMethod
+    });
 
-    // Validar fechas
+    // Validar datos requeridos
+    if (!cabinId || !checkIn || !checkOut || !guestName || !guestLastName || !guestPhone) {
+      console.log('❌ Datos requeridos faltantes');
+      return res.status(400).json({ error: 'Faltan datos requeridos' });
+    }
+
+    console.log('✅ Validación de datos requeridos pasada');
+
+    // Parsear fechas
     const checkInDate = new Date(checkIn);
     const checkOutDate = new Date(checkOut);
 
-    if (checkInDate >= checkOutDate) {
-      return res.status(400).json({ 
-        error: 'La fecha de check-out debe ser posterior al check-in' 
-      });
+    console.log('🔍 Fechas parseadas:', {
+      checkInDate: checkInDate.toISOString(),
+      checkOutDate: checkOutDate.toISOString()
+    });
+
+    // Validar fechas
+    if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+      console.log('❌ Fechas inválidas');
+      return res.status(400).json({ error: 'Fechas inválidas' });
     }
 
+    if (checkInDate >= checkOutDate) {
+      console.log('❌ Fecha de salida debe ser posterior a la de llegada');
+      return res.status(400).json({ error: 'Fecha de salida debe ser posterior a la de llegada' });
+    }
+
+    console.log('✅ Validación de fechas pasada');
+
     // Verificar disponibilidad
+    console.log('🔍 Verificando disponibilidad...');
+    console.log('🔍 Buscando conflictos para:', {
+      cabinId,
+      checkInDate: checkInDate.toISOString(),
+      checkOutDate: checkOutDate.toISOString()
+    });
+
+    // Buscar reservaciones que se superpongan con las fechas solicitadas
     const conflictingReservation = await prisma.reservation.findFirst({
       where: {
         cabinId,
@@ -278,35 +320,51 @@ router.post('/', [
           in: ['PENDING', 'CONFIRMED']
         },
         OR: [
+          // Caso 1: La reservación existente empieza antes y termina después del check-in solicitado
           {
-            AND: [
-              { checkIn: { lte: checkInDate } },
-              { checkOut: { gt: checkInDate } }
-            ]
+            checkIn: { lte: checkInDate },
+            checkOut: { gt: checkInDate }
           },
+          // Caso 2: La reservación existente empieza antes del check-out solicitado y termina después
           {
-            AND: [
-              { checkIn: { lt: checkOutDate } },
-              { checkOut: { gte: checkOutDate } }
-            ]
+            checkIn: { lt: checkOutDate },
+            checkOut: { gte: checkOutDate }
           },
+          // Caso 3: La reservación existente está completamente contenida en las fechas solicitadas
           {
-            AND: [
-              { checkIn: { gte: checkInDate } },
-              { checkOut: { lte: checkOutDate } }
-            ]
+            checkIn: { gte: checkInDate },
+            checkOut: { lte: checkOutDate }
           }
         ]
+      },
+      select: {
+        id: true,
+        checkIn: true,
+        checkOut: true,
+        guestName: true,
+        guestLastName: true,
+        status: true
       }
     });
 
     if (conflictingReservation) {
+      console.log('❌ Conflicto de disponibilidad encontrado:', {
+        conflictingId: conflictingReservation.id,
+        conflictingCheckIn: conflictingReservation.checkIn,
+        conflictingCheckOut: conflictingReservation.checkOut,
+        conflictingGuest: `${conflictingReservation.guestName} ${conflictingReservation.guestLastName}`,
+        conflictingStatus: conflictingReservation.status
+      });
       return res.status(400).json({ 
-        error: 'La cabaña no está disponible para las fechas seleccionadas' 
+        error: 'La cabaña no está disponible para las fechas seleccionadas',
+        conflictingReservation
       });
     }
 
+    console.log('✅ Verificación de disponibilidad pasada - No hay conflictos');
+
     // Verificar que la cabaña existe
+    console.log('🔍 Verificando que la cabaña existe...');
     const cabin = await prisma.cabin.findUnique({
       where: { id: cabinId },
       select: {
@@ -318,11 +376,17 @@ router.post('/', [
       }
     });
 
+    console.log('🔍 Cabaña encontrada:', cabin ? cabin.name : 'NO ENCONTRADA');
+
     if (!cabin) {
+      console.log('❌ Cabaña no encontrada');
       return res.status(404).json({ error: 'Cabaña no encontrada' });
     }
 
+    console.log('✅ Cabaña verificada');
+
     // Crear la reservación
+    console.log('🔍 Intentando crear la reservación en la base de datos...');
     const reservation = await prisma.reservation.create({
       data: {
         cabinId,
@@ -351,7 +415,7 @@ router.post('/', [
       }
     });
 
-    console.log('✅ Reservación creada:', reservation.id);
+    console.log('✅ Reservación creada exitosamente:', reservation.id);
 
     res.status(201).json({
       message: 'Reservación creada exitosamente',
@@ -360,6 +424,7 @@ router.post('/', [
 
   } catch (error) {
     console.error('❌ Error creating reservation:', error);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).json({ error: 'Error al crear la reservación' });
   }
 });
