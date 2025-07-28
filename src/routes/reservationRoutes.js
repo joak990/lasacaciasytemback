@@ -285,7 +285,6 @@ router.post('/', [
   body('guestCount').isInt({ min: 1 }),
   body('guestName').notEmpty().trim(),
   body('guestLastName').notEmpty().trim(),
-  body('guestPhone').notEmpty().trim(),
   body('guestEmail').optional().custom((value) => {
     if (value && value.trim() !== '') {
       // Si hay un valor, debe ser un email válido
@@ -296,21 +295,14 @@ router.post('/', [
     }
     return true;
   }),
-  body('specialRequests').optional().trim(),
-  body('paymentStatus').optional().isIn(['PENDING', 'PARTIAL', 'PAID', 'REFUNDED']),
+  body('guestPhone').notEmpty().trim(),
+  body('totalPrice').isFloat({ min: 0 }),
   body('amountPaid').optional().isFloat({ min: 0 }),
   body('paymentMethod').optional().isIn(['CASH', 'CARD', 'TRANSFER', 'DEPOSIT', 'OTHER']),
-  body('services').optional().isArray(),
   handleValidationErrors
 ], async (req, res) => {
   try {
     console.log('🔍 Backend recibiendo datos:', req.body);
-    console.log('🔍 Tipos de datos recibidos:');
-    console.log('  - cabinId:', typeof req.body.cabinId, req.body.cabinId);
-    console.log('  - guestCount:', typeof req.body.guestCount, req.body.guestCount);
-    console.log('  - amountPaid:', typeof req.body.amountPaid, req.body.amountPaid);
-    console.log('  - checkIn:', typeof req.body.checkIn, req.body.checkIn);
-    console.log('  - checkOut:', typeof req.body.checkOut, req.body.checkOut);
     
     const { 
       cabinId, 
@@ -319,14 +311,11 @@ router.post('/', [
       guestCount, 
       guestName,
       guestLastName,
-      guestPhone,
       guestEmail,
-      specialRequests,
-      paymentStatus = 'PENDING',
+      guestPhone,
+      totalPrice,
       amountPaid = 0,
-      paymentMethod,
-      paymentNotes,
-      services 
+      paymentMethod = 'TRANSFER'
     } = req.body;
 
     // Procesar fechas de forma segura para evitar problemas de zona horaria
@@ -399,7 +388,7 @@ router.post('/', [
       });
     }
 
-    // Obtener información de la cabaña para calcular el precio
+    // Verificar que la cabaña existe
     const cabin = await prisma.cabin.findUnique({
       where: { id: cabinId }
     });
@@ -408,42 +397,22 @@ router.post('/', [
       return res.status(404).json({ error: 'Cabaña no encontrada' });
     }
 
-    // Calcular días de estadía
-    const daysDiff = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
-    const cabinPrice = parseFloat(cabin.price) * daysDiff;
-
-    // Calcular precio total de servicios
-    let servicesPrice = 0;
-    if (services && services.length > 0) {
-      for (const serviceItem of services) {
-        const service = await prisma.service.findUnique({
-          where: { id: serviceItem.serviceId }
-        });
-        if (service) {
-          servicesPrice += parseFloat(service.price) * serviceItem.quantity;
-        }
-      }
-    }
-
-    const totalPrice = cabinPrice + servicesPrice;
-
     // Crear la reservación
     const reservation = await prisma.reservation.create({
       data: {
         cabinId,
         checkIn: checkInDate,
         checkOut: checkOutDate,
-        totalPrice,
-        guestCount,
+        totalPrice: parseFloat(totalPrice),
+        guestCount: guestCount,
         guestName,
         guestLastName,
+        guestEmail: guestEmail || '',
         guestPhone,
-        guestEmail,
-        specialRequests,
-        paymentStatus,
-        amountPaid,
+        paymentStatus: 'PENDING',
+        amountPaid: parseFloat(amountPaid),
         paymentMethod,
-        paymentNotes
+        status: 'PENDING'
       },
       include: {
         cabin: {
@@ -456,45 +425,7 @@ router.post('/', [
       }
     });
 
-    // Agregar servicios a la reservación si se proporcionaron
-    if (services && services.length > 0) {
-      const reservationServices = [];
-      
-      for (const serviceItem of services) {
-        const service = await prisma.service.findUnique({
-          where: { id: serviceItem.serviceId }
-        });
-        
-        if (service) {
-          reservationServices.push({
-            reservationId: reservation.id,
-            serviceId: serviceItem.serviceId,
-            quantity: serviceItem.quantity,
-            price: parseFloat(service.price) * serviceItem.quantity
-          });
-        }
-      }
-
-      if (reservationServices.length > 0) {
-        await prisma.reservationService.createMany({
-          data: reservationServices
-        });
-      }
-    }
-
-    // Si hay un pago inicial, crear un registro en la tabla payments
-    if (amountPaid && amountPaid > 0) {
-      await prisma.payment.create({
-        data: {
-          reservationId: reservation.id,
-          amount: parseFloat(amountPaid),
-          method: paymentMethod || 'CASH',
-          note: paymentNotes || 'Pago inicial de la reserva'
-        }
-      });
-    }
-
-    // Obtener la reservación completa con servicios y pagos
+    // Obtener la reservación completa
     const completeReservation = await prisma.reservation.findUnique({
       where: { id: reservation.id },
       include: {
@@ -504,20 +435,7 @@ router.post('/', [
             name: true,
             price: true
           }
-        },
-        reservationServices: {
-          include: {
-            service: {
-              select: {
-                id: true,
-                name: true,
-                price: true,
-                category: true
-              }
-            }
-          }
-        },
-        payments: true
+        }
       }
     });
 
