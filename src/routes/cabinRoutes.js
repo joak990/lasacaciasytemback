@@ -39,6 +39,113 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /api/cabins/available - Buscar cabañas disponibles para fechas específicas
+router.get('/available', async (req, res) => {
+  try {
+    const { checkIn, checkOut, guestCount } = req.query;
+    
+    console.log('🔍 Buscando cabañas disponibles para:', {
+      checkIn,
+      checkOut,
+      guestCount
+    });
+
+    // Validar parámetros requeridos
+    if (!checkIn || !checkOut) {
+      return res.status(400).json({ 
+        error: 'Fechas de check-in y check-out son requeridas' 
+      });
+    }
+
+    // Parsear fechas
+    const checkInDate = new Date(checkIn);
+    const checkOutDate = new Date(checkOut);
+
+    if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+      return res.status(400).json({ error: 'Fechas inválidas' });
+    }
+
+    if (checkInDate >= checkOutDate) {
+      return res.status(400).json({ 
+        error: 'Fecha de salida debe ser posterior a la de llegada' 
+      });
+    }
+
+    // Obtener todas las cabañas activas
+    const allCabins = await prisma.cabin.findMany({
+      where: {
+        status: 'ACTIVE'
+      },
+      select: {
+        id: true,
+        name: true,
+        capacity: true,
+        price: true,
+        status: true,
+        images: true
+      }
+    });
+
+    console.log('🔍 Total cabañas activas:', allCabins.length);
+
+    // Filtrar cabañas disponibles
+    const availableCabins = [];
+    
+    for (const cabin of allCabins) {
+      // Verificar si hay reservaciones conflictivas
+      const conflictingReservation = await prisma.reservation.findFirst({
+        where: {
+          cabinId: cabin.id,
+          status: {
+            in: ['PENDING', 'CONFIRMED']
+          },
+          OR: [
+            // Caso 1: La reservación existente empieza antes y termina después del check-in solicitado
+            {
+              checkIn: { lte: checkInDate },
+              checkOut: { gt: checkInDate }
+            },
+            // Caso 2: La reservación existente empieza antes del check-out solicitado y termina después
+            {
+              checkIn: { lt: checkOutDate },
+              checkOut: { gte: checkOutDate }
+            },
+            // Caso 3: La reservación existente está completamente contenida en las fechas solicitadas
+            {
+              checkIn: { gte: checkInDate },
+              checkOut: { lte: checkOutDate }
+            }
+          ]
+        }
+      });
+
+      // Si no hay conflicto, la cabaña está disponible
+      if (!conflictingReservation) {
+        // Verificar capacidad si se especifica guestCount
+        if (guestCount && cabin.capacity < parseInt(guestCount)) {
+          console.log(`❌ Cabaña ${cabin.name} no tiene capacidad suficiente`);
+          continue;
+        }
+
+        availableCabins.push(cabin);
+        console.log(`✅ Cabaña ${cabin.name} disponible`);
+      } else {
+        console.log(`❌ Cabaña ${cabin.name} no disponible - Conflicto encontrado`);
+      }
+    }
+
+    console.log('✅ Cabañas disponibles encontradas:', availableCabins.length);
+    res.json(availableCabins);
+    
+  } catch (error) {
+    console.error('❌ Error buscando cabañas disponibles:', error);
+    res.status(500).json({ 
+      error: 'Error al buscar cabañas disponibles',
+      details: error.message 
+    });
+  }
+});
+
 // GET /api/cabins/:id - Obtener cabaña por ID
 router.get('/:id', async (req, res) => {
   try {
