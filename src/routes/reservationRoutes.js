@@ -198,7 +198,7 @@ router.get('/:id', async (req, res) => {
             capacity: true,
             price: true,
             amenities: true,
-            imageUrl: true
+            images: true
           }
         },
         reservationServices: {
