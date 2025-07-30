@@ -614,7 +614,8 @@ router.post('/platform', [
         reservation,
         notifications: {
           email: false,
-          sms: false
+          sms: false,
+          guestEmail: false
         },
         notificationError: notificationError.message
       });
