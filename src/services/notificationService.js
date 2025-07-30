@@ -21,6 +21,10 @@ class NotificationService {
   // Enviar email de notificación
   async sendEmailNotification(reservation, cabin) {
     try {
+      console.log('📧 Configurando email...');
+      console.log('📧 EMAIL_USER:', process.env.EMAIL_USER);
+      console.log('📧 ADMIN_EMAIL:', process.env.ADMIN_EMAIL);
+      
       const mailOptions = {
         from: process.env.EMAIL_USER || 'lasacaciasrefugio@gmail.com',
         to: process.env.ADMIN_EMAIL || 'analia@lasacacias.com',
@@ -80,6 +84,7 @@ class NotificationService {
         `
       };
 
+      console.log('📧 Enviando email...');
       const info = await this.emailTransporter.sendMail(mailOptions);
       console.log('✅ Email enviado:', info.messageId);
       return true;
@@ -104,8 +109,24 @@ class NotificationService {
   async notifyNewPlatformReservation(reservation, cabin) {
     console.log('🔔 Enviando notificaciones para nueva reserva de plataforma...');
     
-    const emailSent = await this.sendEmailNotification(reservation, cabin);
-    const smsSent = await this.sendSMSNotification(reservation, cabin);
+    let emailSent = false;
+    let smsSent = false;
+    
+    try {
+      emailSent = await this.sendEmailNotification(reservation, cabin);
+    } catch (error) {
+      console.error('❌ Error enviando email:', error);
+      emailSent = false;
+    }
+    
+    try {
+      smsSent = await this.sendSMSNotification(reservation, cabin);
+    } catch (error) {
+      console.error('❌ Error enviando SMS:', error);
+      smsSent = false;
+    }
+    
+    console.log('📊 Resultado de notificaciones:', { emailSent, smsSent });
     
     return {
       email: emailSent,

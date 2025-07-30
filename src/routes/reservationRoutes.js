@@ -5,6 +5,16 @@ const notificationService = require('../services/notificationService');
 
 const router = express.Router();
 
+// GET /api/reservations/test - Endpoint de prueba
+router.get('/test', (req, res) => {
+  console.log('🧪 Test endpoint called');
+  res.json({ 
+    message: 'Reservation API is working',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
+  });
+});
+
 // Middleware para validar errores
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
@@ -453,6 +463,8 @@ router.post('/platform', [
 ], async (req, res) => {
   try {
     console.log('🔍 Iniciando creación de reservación desde plataforma web...');
+    console.log('🔍 Request body:', req.body);
+    console.log('🔍 Environment:', process.env.NODE_ENV);
     
     const {
       cabinId,
@@ -587,22 +599,31 @@ router.post('/platform', [
       console.log('🔔 Enviando notificaciones...');
       const notificationResult = await notificationService.notifyNewPlatformReservation(reservation, reservation.cabin);
       console.log('✅ Notificaciones enviadas:', notificationResult);
+      
+      res.status(201).json({
+        message: 'Reservación creada exitosamente desde la plataforma web',
+        reservation,
+        notifications: notificationResult
+      });
+      
     } catch (notificationError) {
       console.error('❌ Error enviando notificaciones:', notificationError);
       // No fallar la creación de la reserva si fallan las notificaciones
+      res.status(201).json({
+        message: 'Reservación creada exitosamente desde la plataforma web (notificaciones fallaron)',
+        reservation,
+        notifications: {
+          email: false,
+          sms: false
+        },
+        notificationError: notificationError.message
+      });
     }
-
-    res.status(201).json({
-      message: 'Reservación creada exitosamente desde la plataforma web',
-      reservation,
-      notifications: {
-        email: true,
-        sms: true
-      }
-    });
 
   } catch (error) {
     console.error('❌ Error creating platform reservation:', error);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Error message:', error.message);
     res.status(500).json({ error: 'Error al crear la reservación' });
   }
 });
