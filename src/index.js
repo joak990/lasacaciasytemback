@@ -12,7 +12,10 @@ app.use(cors({
     'http://localhost:3001',
     'http://localhost:3000',
     'http://127.0.0.1:3001',
-    'https://lasacaciasistemafront.vercel.app' // <--- Agrega aquí tu dominio de Vercel
+    'https://lasacaciasistemafront.vercel.app',
+    'https://lasacaciasistemafront.vercel.app/',
+    'https://*.vercel.app',
+    'https://vercel.app'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
@@ -20,6 +23,9 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Handle preflight requests
+app.options('*', cors());
 
 // Routes
 app.get('/', (req, res) => {

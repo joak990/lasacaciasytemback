@@ -416,6 +416,16 @@ router.post('/', [
 
     console.log('✅ Reservación creada exitosamente:', reservation.id);
 
+    // Enviar notificaciones por email y SMS
+    try {
+      console.log('🔔 Enviando notificaciones...');
+      const notificationResult = await notificationService.notifyNewPlatformReservation(reservation, reservation.cabin);
+      console.log('✅ Notificaciones enviadas:', notificationResult);
+    } catch (notificationError) {
+      console.error('❌ Error enviando notificaciones:', notificationError);
+      // No fallar la creación de la reserva si fallan las notificaciones
+    }
+
     res.status(201).json({
       message: 'Reservación creada exitosamente',
       reservation
@@ -424,6 +434,175 @@ router.post('/', [
   } catch (error) {
     console.error('❌ Error creating reservation:', error);
     console.error('❌ Error stack:', error.stack);
+    res.status(500).json({ error: 'Error al crear la reservación' });
+  }
+});
+
+// POST /api/reservations/platform - Crear reservación desde plataforma web
+router.post('/platform', [
+  body('cabinId').notEmpty().withMessage('ID de cabaña es requerido'),
+  body('checkIn').isISO8601().withMessage('Fecha de check-in debe ser válida'),
+  body('checkOut').isISO8601().withMessage('Fecha de check-out debe ser válida'),
+  body('totalPrice').isFloat({ min: 0 }).withMessage('Precio total debe ser un número válido'),
+  body('guestCount').isInt({ min: 1 }).withMessage('Número de huéspedes debe ser un entero válido'),
+  body('guestName').notEmpty().trim().withMessage('Nombre del huésped es requerido'),
+  body('guestLastName').notEmpty().trim().withMessage('Apellido del huésped es requerido'),
+  body('guestPhone').notEmpty().trim().withMessage('Teléfono del huésped es requerido'),
+  body('guestEmail').optional().isEmail().withMessage('Email debe ser válido'),
+  handleValidationErrors
+], async (req, res) => {
+  try {
+    console.log('🔍 Iniciando creación de reservación desde plataforma web...');
+    
+    const {
+      cabinId,
+      checkIn,
+      checkOut,
+      totalPrice,
+      guestCount,
+      guestName,
+      guestLastName,
+      guestPhone,
+      guestEmail
+    } = req.body;
+
+    console.log('🔍 Datos de reserva desde plataforma:', {
+      cabinId,
+      checkIn,
+      checkOut,
+      totalPrice,
+      guestCount,
+      guestName,
+      guestLastName,
+      guestPhone,
+      guestEmail
+    });
+
+    // Validar datos requeridos
+    if (!cabinId || !checkIn || !checkOut || !guestName || !guestLastName || !guestPhone) {
+      console.log('❌ Datos requeridos faltantes');
+      return res.status(400).json({ error: 'Faltan datos requeridos' });
+    }
+
+    // Parsear fechas
+    const checkInDate = new Date(checkIn);
+    const checkOutDate = new Date(checkOut);
+
+    // Validar fechas
+    if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+      console.log('❌ Fechas inválidas');
+      return res.status(400).json({ error: 'Fechas inválidas' });
+    }
+
+    if (checkInDate >= checkOutDate) {
+      console.log('❌ Fecha de salida debe ser posterior a la de llegada');
+      return res.status(400).json({ error: 'Fecha de salida debe ser posterior a la de llegada' });
+    }
+
+    // Verificar disponibilidad
+    console.log('🔍 Verificando disponibilidad...');
+    const conflictingReservation = await prisma.reservation.findFirst({
+      where: {
+        cabinId,
+        status: {
+          in: ['PENDING', 'CONFIRMED']
+        },
+        OR: [
+          {
+            checkIn: { lte: checkInDate },
+            checkOut: { gt: checkInDate }
+          },
+          {
+            checkIn: { lt: checkOutDate },
+            checkOut: { gte: checkOutDate }
+          },
+          {
+            checkIn: { gte: checkInDate },
+            checkOut: { lte: checkOutDate }
+          }
+        ]
+      }
+    });
+
+    if (conflictingReservation) {
+      console.log('❌ Conflicto de disponibilidad encontrado');
+      return res.status(400).json({ 
+        error: 'La cabaña no está disponible para las fechas seleccionadas',
+        conflictingReservation
+      });
+    }
+
+    // Verificar que la cabaña existe
+    const cabin = await prisma.cabin.findUnique({
+      where: { id: cabinId },
+      select: {
+        id: true,
+        name: true,
+        capacity: true,
+        price: true,
+        status: true
+      }
+    });
+
+    if (!cabin) {
+      console.log('❌ Cabaña no encontrada');
+      return res.status(404).json({ error: 'Cabaña no encontrada' });
+    }
+
+    // Crear la reservación
+    console.log('🔍 Creando reservación...');
+    const reservation = await prisma.reservation.create({
+      data: {
+        cabinId,
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+        totalPrice: parseFloat(totalPrice),
+        guestCount: guestCount,
+        guestName,
+        guestLastName,
+        guestEmail: guestEmail || '',
+        guestPhone,
+        paymentStatus: 'PENDING',
+        amountPaid: 0,
+        paymentMethod: 'TRANSFER',
+        status: 'PENDING',
+        channel: 'PLATFORM' // Usar channel en lugar de source
+      },
+      include: {
+        cabin: {
+          select: {
+            id: true,
+            name: true,
+            capacity: true,
+            price: true
+          }
+        }
+      }
+    });
+
+    console.log('✅ Reservación creada exitosamente:', reservation.id);
+
+    // Enviar notificaciones por email y SMS
+    try {
+      console.log('🔔 Enviando notificaciones...');
+      const notificationResult = await notificationService.notifyNewPlatformReservation(reservation, reservation.cabin);
+      console.log('✅ Notificaciones enviadas:', notificationResult);
+    } catch (notificationError) {
+      console.error('❌ Error enviando notificaciones:', notificationError);
+      // No fallar la creación de la reserva si fallan las notificaciones
+    }
+
+    res.status(201).json({
+      message: 'Reservación creada exitosamente desde la plataforma web',
+      reservation,
+      notifications: {
+        email: true,
+        sms: true
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error creating platform reservation:', error);
     res.status(500).json({ error: 'Error al crear la reservación' });
   }
 });
