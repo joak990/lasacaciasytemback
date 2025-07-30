@@ -577,8 +577,8 @@ router.post('/platform', [
         paymentStatus: 'PENDING',
         amountPaid: 0,
         paymentMethod: 'TRANSFER',
-        status: 'PENDING',
-        channel: 'PLATFORM' // Usar channel en lugar de source
+        status: 'PENDING'
+        // channel: 'PLATFORM' // Comentado temporalmente hasta que se haga la migración
       },
       include: {
         cabin: {

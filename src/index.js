@@ -36,6 +36,15 @@ app.get('/', (req, res) => {
   });
 });
 
+// Test endpoint
+app.get('/api/test', (req, res) => {
+  res.json({
+    message: 'API is working',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
+  });
+});
+
 // Import routes
 const authRoutes = require('./routes/userRoutes');
 const cabinRoutes = require('./routes/cabinRoutes');
