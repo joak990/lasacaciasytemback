@@ -992,7 +992,17 @@ router.put('/:id/status', async (req, res) => {
       where: { id },
       data: { status },
       include: {
-        cabin: true
+        cabin: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            capacity: true,
+            price: true,
+            status: true,
+            images: true
+          }
+        }
       }
     });
     
@@ -1011,7 +1021,17 @@ router.post('/:id/send-confirmation', async (req, res) => {
     const reservation = await prisma.reservation.findUnique({
       where: { id },
       include: {
-        cabin: true
+        cabin: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            capacity: true,
+            price: true,
+            status: true,
+            images: true
+          }
+        }
       }
     });
     
@@ -1033,7 +1053,8 @@ router.post('/:id/send-confirmation', async (req, res) => {
   } catch (error) {
     console.error('Error enviando correo de confirmación:', error);
     res.status(500).json({ error: 'Error al enviar correo de confirmación' });
-  }// ... existing code ...
+  }
+});
 
 // POST /api/reservations/:id/send-cancellation - Enviar correo de cancelación
 router.post('/:id/send-cancellation', async (req, res) => {
@@ -1043,7 +1064,17 @@ router.post('/:id/send-cancellation', async (req, res) => {
     const reservation = await prisma.reservation.findUnique({
       where: { id },
       include: {
-        cabin: true
+        cabin: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            capacity: true,
+            price: true,
+            status: true,
+            images: true
+          }
+        }
       }
     });
     
@@ -1066,9 +1097,6 @@ router.post('/:id/send-cancellation', async (req, res) => {
     console.error('Error enviando correo de cancelación:', error);
     res.status(500).json({ error: 'Error al enviar correo de cancelación' });
   }
-});
-
-// ... existing code ...
 });
 
 // ... existing code ...
