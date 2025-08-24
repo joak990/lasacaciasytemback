@@ -16,8 +16,8 @@ model Cabin {
   updatedAt    DateTime      @default(now()) @updatedAt
   amenities    String[]
   description  String?
-  images       String[]      @default([]) // Array de URLs de imágenes
   status       CabinStatus   @default(AVAILABLE)
+  images       String[]      @default([])
   reservations Reservation[]
 }
 
