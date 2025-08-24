@@ -999,8 +999,7 @@ router.put('/:id/status', async (req, res) => {
             description: true,
             capacity: true,
             price: true,
-            status: true,
-            images: true
+            status: true
           }
         }
       }
@@ -1028,8 +1027,7 @@ router.post('/:id/send-confirmation', async (req, res) => {
             description: true,
             capacity: true,
             price: true,
-            status: true,
-            images: true
+            status: true
           }
         }
       }
@@ -1071,8 +1069,7 @@ router.post('/:id/send-cancellation', async (req, res) => {
             description: true,
             capacity: true,
             price: true,
-            status: true,
-            images: true
+            status: true
           }
         }
       }
