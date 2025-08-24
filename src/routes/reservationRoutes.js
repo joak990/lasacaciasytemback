@@ -978,4 +978,98 @@ router.post('/:id/payments', async (req, res) => {
   }
 });
 
-module.exports = router; 
+// PUT /api/reservations/:id/status - Actualizar estado de reserva
+router.put('/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    if (!['PENDING', 'CONFIRMED', 'CANCELLED'].includes(status)) {
+      return res.status(400).json({ error: 'Estado inválido. Debe ser PENDING, CONFIRMED o CANCELLED' });
+    }
+    
+    const reservation = await prisma.reservation.update({
+      where: { id },
+      data: { status },
+      include: {
+        cabin: true
+      }
+    });
+    
+    res.json(reservation);
+  } catch (error) {
+    console.error('Error actualizando estado de reserva:', error);
+    res.status(500).json({ error: 'Error al actualizar estado de reserva' });
+  }
+});
+
+// POST /api/reservations/:id/send-confirmation - Enviar correo de confirmación
+router.post('/:id/send-confirmation', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const reservation = await prisma.reservation.findUnique({
+      where: { id },
+      include: {
+        cabin: true
+      }
+    });
+    
+    if (!reservation) {
+      return res.status(404).json({ error: 'Reservación no encontrada' });
+    }
+    
+    if (!reservation.guestEmail) {
+      return res.status(400).json({ error: 'La reserva no tiene un correo electrónico asociado' });
+    }
+    
+    const result = await notificationService.sendPaymentConfirmationEmail(reservation, reservation.cabin);
+    
+    if (result) {
+      res.json({ success: true, message: 'Correo de confirmación enviado exitosamente' });
+    } else {
+      res.status(500).json({ error: 'Error al enviar correo de confirmación' });
+    }
+  } catch (error) {
+    console.error('Error enviando correo de confirmación:', error);
+    res.status(500).json({ error: 'Error al enviar correo de confirmación' });
+  }// ... existing code ...
+
+// POST /api/reservations/:id/send-cancellation - Enviar correo de cancelación
+router.post('/:id/send-cancellation', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const reservation = await prisma.reservation.findUnique({
+      where: { id },
+      include: {
+        cabin: true
+      }
+    });
+    
+    if (!reservation) {
+      return res.status(404).json({ error: 'Reservación no encontrada' });
+    }
+    
+    if (!reservation.guestEmail) {
+      return res.status(400).json({ error: 'La reserva no tiene un correo electrónico asociado' });
+    }
+    
+    const result = await notificationService.sendCancellationEmail(reservation, reservation.cabin);
+    
+    if (result) {
+      res.json({ success: true, message: 'Correo de cancelación enviado exitosamente' });
+    } else {
+      res.status(500).json({ error: 'Error al enviar correo de cancelación' });
+    }
+  } catch (error) {
+    console.error('Error enviando correo de cancelación:', error);
+    res.status(500).json({ error: 'Error al enviar correo de cancelación' });
+  }
+});
+
+// ... existing code ...
+});
+
+// ... existing code ...
+module.exports = router;

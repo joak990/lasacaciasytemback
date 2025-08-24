@@ -105,15 +105,15 @@ class NotificationService {
     }
   }
 
-  // Enviar email de confirmación al huésped
-  async sendGuestConfirmationEmail(reservation, cabin) {
+  // Enviar email de confirmación de pago al huésped
+  async sendPaymentConfirmationEmail(reservation, cabin) {
     try {
-      console.log('📧 Enviando email de confirmación al huésped...');
+      console.log('📧 Enviando email de confirmación de pago al huésped...');
       
       const mailOptions = {
         from: process.env.EMAIL_USER || 'lasacaciasrefugio@gmail.com',
         to: reservation.guestEmail,
-        subject: '✅ Confirmación de Reserva - Las Acacias Refugio',
+        subject: '✅ Reserva Confirmada - Las Acacias Refugio',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f9fa;">
             <!-- Header -->
@@ -131,7 +131,7 @@ class NotificationService {
                   <span style="font-size: 40px; color: #22c55e;">✅</span>
                 </div>
                 <h2 style="color: #1f2937; margin: 0 0 10px 0; font-size: 24px;">¡Reserva Confirmada!</h2>
-                <p style="color: #6b7280; margin: 0; font-size: 16px;">Hola ${reservation.guestName}, tu reserva ha sido procesada exitosamente.</p>
+                <p style="color: #6b7280; margin: 0; font-size: 16px;">Hola ${reservation.guestName}, tu pago ha sido procesado y tu reserva está confirmada.</p>
               </div>
 
               <!-- Reservation Details -->
@@ -149,75 +149,182 @@ class NotificationService {
                   </div>
                   <div>
                     <p style="margin: 0 0 5px 0; color: #6b7280; font-size: 14px; font-weight: bold;">CHECK-IN</p>
-                    <p style="margin: 0; color: #1f2937; font-size: 16px; font-weight: bold;">${new Date(reservation.checkIn).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    <p style="margin: 0; color: #1f2937; font-size: 16px; font-weight: bold;">${new Date(reservation.checkIn).toLocaleDateString('es-ES')}</p>
                   </div>
                   <div>
                     <p style="margin: 0 0 5px 0; color: #6b7280; font-size: 14px; font-weight: bold;">CHECK-OUT</p>
-                    <p style="margin: 0; color: #1f2937; font-size: 16px; font-weight: bold;">${new Date(reservation.checkOut).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                    <p style="margin: 0; color: #1f2937; font-size: 16px; font-weight: bold;">${new Date(reservation.checkOut).toLocaleDateString('es-ES')}</p>
                   </div>
                 </div>
-
-                <div style="background-color: white; padding: 20px; border-radius: 8px; border-left: 4px solid #3b82f6;">
-                  <p style="margin: 0 0 10px 0; color: #1f2937; font-size: 16px; font-weight: bold;">💰 Total de la Reserva</p>
-                  <p style="margin: 0; color: #059669; font-size: 24px; font-weight: bold;">ARS ${reservation.totalPrice.toLocaleString()}</p>
-                </div>
               </div>
-
-              <!-- Payment Information -->
-              <div style="background-color: #fef3c7; padding: 25px; border-radius: 10px; margin-bottom: 30px; border-left: 4px solid #f59e0b;">
-                <h3 style="color: #92400e; margin: 0 0 15px 0; font-size: 18px;">💳 Información de Pago</h3>
-                <p style="margin: 0 0 15px 0; color: #92400e; font-size: 14px;">Para confirmar tu reserva, necesitas realizar el depósito del 50%:</p>
-                
-                <div style="background-color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                  <p style="margin: 0 0 5px 0; color: #92400e; font-size: 14px; font-weight: bold;">Monto a depositar:</p>
-                  <p style="margin: 0; color: #92400e; font-size: 20px; font-weight: bold;">ARS ${Math.round(reservation.totalPrice * 0.5).toLocaleString()}</p>
-                </div>
-
-                <div style="background-color: white; padding: 15px; border-radius: 8px;">
-                  <p style="margin: 0 0 5px 0; color: #92400e; font-size: 14px; font-weight: bold;">Datos para la transferencia:</p>
-                  <p style="margin: 0 0 5px 0; color: #92400e; font-size: 14px;"><strong>Banco:</strong> Santander</p>
-                  <p style="margin: 0 0 5px 0; color: #92400e; font-size: 14px;"><strong>Alias:</strong> LASACACIASREFUGIO</p>
-                  <p style="margin: 0; color: #92400e; font-size: 14px;"><strong>Titular:</strong> Analía González</p>
-                </div>
+              
+              <div style="background-color: #eef2ff; padding: 15px; border-radius: 8px; margin-top: 20px;">
+                <p style="margin: 0; color: #1e40af; font-weight: bold; font-size: 16px;">💰 Precio total: $${reservation.totalPrice}</p>
               </div>
-
-              <!-- Important Notes -->
-              <div style="background-color: #fef2f2; padding: 20px; border-radius: 10px; margin-bottom: 30px; border-left: 4px solid #ef4444;">
-                <h3 style="color: #991b1b; margin: 0 0 15px 0; font-size: 18px;">⚠️ Información Importante</h3>
-                <ul style="margin: 0; padding-left: 20px; color: #991b1b; font-size: 14px;">
-                  <li style="margin-bottom: 8px;">Tienes <strong>24 horas</strong> para realizar el pago y confirmar tu reserva</li>
-                  <li style="margin-bottom: 8px;">Enviar comprobante de pago por WhatsApp al +54 3548 63-1824</li>
-                  <li style="margin-bottom: 8px;">El check-in es a partir de las 15:00 hs</li>
-                  <li style="margin-bottom: 8px;">El check-out es hasta las 11:00 hs</li>
-                  <li style="margin-bottom: 8px;">Llevar ropa de cama y toallas</li>
-                  <li style="margin-bottom: 0;">No se permiten mascotas</li>
-                </ul>
-              </div>
-
-              <!-- Contact Information -->
-              <div style="text-align: center; padding: 20px; background-color: #f8f9fa; border-radius: 10px;">
-                <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">📞 Contacto</h3>
-                <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 14px;">Si tienes alguna pregunta, no dudes en contactarnos:</p>
-                <p style="margin: 0 0 5px 0; color: #1f2937; font-size: 14px;"><strong>WhatsApp:</strong> +54 3548 63-1824</p>
-                <p style="margin: 0; color: #1f2937; font-size: 14px;"><strong>Email:</strong> analia@lasacacias.com</p>
-              </div>
-
             </div>
-
+            
+            <!-- Important Information -->
+            <div style="margin-bottom: 30px;">
+              <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 20px;">ℹ️ Información Importante</h3>
+              
+              <ul style="color: #4b5563; padding-left: 20px; margin: 0;">
+                <li style="margin-bottom: 10px;">El horario de check-in es a partir de las 14:00 hs.</li>
+                <li style="margin-bottom: 10px;">El horario de check-out es hasta las 10:00 hs.</li>
+                <li style="margin-bottom: 10px;">Por favor, traer toallas y artículos de higiene personal.</li>
+                <li style="margin-bottom: 10px;">No se permiten mascotas.</li>
+              </ul>
+            </div>
+            
+            <!-- Contact -->
+            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+              <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">📞 ¿Necesitas ayuda?</h3>
+              <p style="color: #4b5563; margin: 0 0 10px 0;">Si tienes alguna pregunta o necesitas asistencia, contáctanos:</p>
+              <p style="color: #1e40af; margin: 0; font-weight: bold;">WhatsApp: +54 9 11 1234-5678</p>
+            </div>
+            
             <!-- Footer -->
-            <div style="text-align: center; padding: 20px; color: #6b7280; font-size: 12px;">
-              <p style="margin: 0;">Las Acacias Refugio - Villa General Belgrano, Córdoba</p>
-              <p style="margin: 5px 0 0 0;">Gracias por elegirnos para tu estadía</p>
+            <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+              <p style="color: #6b7280; margin: 0; font-size: 14px;">
+                Las Acacias Refugio<br>
+                Ruta 11, Km 10, Costa del Este<br>
+                Buenos Aires, Argentina
+              </p>
             </div>
           </div>
         `
       };
 
+      console.log('📧 Enviando email...');
       const info = await this.emailTransporter.sendMail(mailOptions);
-      console.log('✅ Email de confirmación enviado al huésped:', info.messageId);
+      console.log('✅ Email de confirmación enviado:', info.messageId);
       return true;
     } catch (error) {
-      console.error('❌ Error enviando email de confirmación al huésped:', error);
+      console.error('❌ Error enviando email de confirmación:', error);
+      return false;
+    }
+  }
+
+  // Enviar email de cancelación al huésped
+  async sendCancellationEmail(reservation, cabin) {
+    try {
+      console.log('📧 Enviando email de cancelación al huésped...');
+      
+      const mailOptions = {
+        from: process.env.EMAIL_USER || 'lasacaciasrefugio@gmail.com',
+        to: reservation.guestEmail,
+        subject: '❌ Reserva Cancelada - Las Acacias Refugio',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f9fa;">
+            <div style="background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+              <h1 style="color: white; margin: 0; font-size: 28px; font-weight: bold;">🏠 Las Acacias Refugio</h1>
+              <p style="color: #fecaca; margin: 10px 0 0 0; font-size: 16px;">Tu reserva ha sido cancelada</p>
+            </div>
+            <div style="background-color: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <div style="background-color: #fee2e2; border: 2px solid #dc2626; border-radius: 50%; width: 80px; height: 80px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+                  <span style="font-size: 40px; color: #dc2626;">❌</span>
+                </div>
+                <h2 style="color: #1f2937; margin: 0 0 10px 0; font-size: 24px;">Reserva Cancelada</h2>
+                <p style="color: #6b7280; margin: 0; font-size: 16px;">Hola ${reservation.guestName}, lamentamos informarte que tu reserva ha sido cancelada.</p>
+              </div>
+              <div style="background-color: #f8f9fa; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
+                <h3 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px;">📋 Detalles de la Reserva Cancelada</h3>
+                <p><strong>Cabaña:</strong> ${cabin.name}</p>
+                <p><strong>Fechas:</strong> ${new Date(reservation.checkIn).toLocaleDateString('es-ES')} - ${new Date(reservation.checkOut).toLocaleDateString('es-ES')}</p>
+                <p><strong>Huéspedes:</strong> ${reservation.guestCount} personas</p>
+                <p><strong>Total:</strong> $${reservation.totalPrice}</p>
+              </div>
+              <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">📞 ¿Necesitas ayuda?</h3>
+                <p style="color: #4b5563; margin: 0 0 10px 0;">Si tienes alguna pregunta sobre la cancelación, contáctanos:</p>
+                <p style="color: #1e40af; margin: 0; font-weight: bold;">WhatsApp: +54 9 11 1234-5678</p>
+              </div>
+            </div>
+          </div>
+        `
+      };
+  
+      const info = await this.emailTransporter.sendMail(mailOptions);
+      console.log('✅ Email de cancelación enviado:', info.messageId);
+      return true;
+    } catch (error) {
+      console.error('❌ Error enviando email de cancelación:', error);
+      return false;
+    }
+  }
+
+  // Enviar email de pre-reserva al huésped
+  async sendGuestConfirmationEmail(reservation, cabin) {
+    try {
+      console.log('📧 Enviando email de pre-reserva al huésped...');
+      
+      const mailOptions = {
+        from: process.env.EMAIL_USER || 'lasacaciasrefugio@gmail.com',
+        to: reservation.guestEmail,
+        subject: '🏠 Pre-Reserva - Las Acacias Refugio - ¡Falta poco para finalizar!',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f9fa;">
+            <div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+              <h1 style="color: white; margin: 0; font-size: 28px; font-weight: bold;">🏠 Las Acacias Refugio</h1>
+              <p style="color: #a7f3d0; margin: 10px 0 0 0; font-size: 16px;">¡Falta poco para finalizar tu reserva!</p>
+            </div>
+            <div style="background-color: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <div style="background-color: #d1fae5; border: 2px solid #059669; border-radius: 50%; width: 80px; height: 80px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+                  <span style="font-size: 40px; color: #059669;">⏳</span>
+                </div>
+                <h2 style="color: #1f2937; margin: 0 0 10px 0; font-size: 24px;">Pre-Reserva Recibida</h2>
+                <p style="color: #6b7280; margin: 0; font-size: 16px;">¡Hola ${reservation.guestName}! Hemos recibido tu solicitud de reserva.</p>
+                <p style="color: #059669; margin: 10px 0 0 0; font-size: 18px; font-weight: bold;">¡Falta poco para finalizar tu reserva!</p>
+              </div>
+              
+              <!-- MARCO ROJO CON RECORDATORIO -->
+              <div style="background-color: #fef2f2; border: 3px solid #dc2626; padding: 20px; border-radius: 10px; margin-bottom: 30px; text-align: center;">
+                <div style="display: inline-flex; align-items: center; justify-content: center; background-color: #dc2626; color: white; border-radius: 50%; width: 50px; height: 50px; margin-bottom: 15px;">
+                  <span style="font-size: 24px;">⚠️</span>
+                </div>
+                <h3 style="color: #dc2626; margin: 0 0 10px 0; font-size: 18px; font-weight: bold;">¡IMPORTANTE!</h3>
+                <p style="color: #dc2626; margin: 0; font-size: 16px; font-weight: bold; line-height: 1.4;">Recordá que tenés 24 hs para enviar el monto de reservación y enviarnos el comprobante para confirmar su estadía!</p>
+              </div>
+              
+              <div style="background-color: #f8f9fa; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
+                <h3 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px;">📋 Detalles de tu Reserva</h3>
+                <p><strong>Cabaña:</strong> ${cabin.name}</p>
+                <p><strong>Fechas:</strong> ${new Date(reservation.checkIn).toLocaleDateString('es-ES')} - ${new Date(reservation.checkOut).toLocaleDateString('es-ES')}</p>
+                <p><strong>Huéspedes:</strong> ${reservation.guestCount} personas</p>
+                <p><strong>Total a pagar:</strong> $${reservation.totalPrice}</p>
+              </div>
+              
+              <div style="background-color: #fef3c7; border: 2px solid #f59e0b; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
+                <h3 style="color: #92400e; margin: 0 0 20px 0; font-size: 20px;">💳 Datos para Transferencia Bancaria</h3>
+                <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 15px;">
+                  <p style="margin: 5px 0;"><strong>Alias:</strong> lasacaciasrefugio</p>
+                  <p style="margin: 5px 0;"><strong>Banco:</strong> Santander</p>
+                  <p style="margin: 5px 0;"><strong>Titular:</strong> Isla Analia Elizabeth</p>
+                  <p style="margin: 5px 0;"><strong>CUIT/CUIL:</strong> 27-22539871-8</p>
+                </div>
+                <p style="color: #92400e; margin: 0; font-size: 14px; font-style: italic;">Por favor, realiza la transferencia por el monto total y envíanos el comprobante por WhatsApp.</p>
+              </div>
+              
+              <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">📞 Contacto</h3>
+                <p style="color: #4b5563; margin: 0 0 10px 0;">Una vez realizada la transferencia, contáctanos para confirmar tu reserva:</p>
+                <p style="color: #1e40af; margin: 0; font-weight: bold;">WhatsApp: +54 3548631824</p>
+              </div>
+              
+              <div style="text-align: center; padding: 20px; background-color: #f3f4f6; border-radius: 10px;">
+                <p style="color: #6b7280; margin: 0; font-size: 14px;">¡Gracias por elegir Las Acacias Refugio! Esperamos recibirte pronto.</p>
+              </div>
+            </div>
+          </div>
+        `
+      };
+  
+      const info = await this.emailTransporter.sendMail(mailOptions);
+      console.log('✅ Email de pre-reserva enviado:', info.messageId);
+      return true;
+    } catch (error) {
+      console.error('❌ Error enviando email de pre-reserva:', error);
       return false;
     }
   }
@@ -267,4 +374,4 @@ class NotificationService {
   }
 }
 
-module.exports = new NotificationService(); 
+module.exports = new NotificationService();
