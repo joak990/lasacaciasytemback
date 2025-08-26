@@ -11,7 +11,7 @@ model Cabin {
   id           String        @id @default(uuid())
   name         String
   capacity     Int
-  price        Float
+  price        Float         // Precio base por defecto
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @default(now()) @updatedAt
   amenities    String[]
@@ -19,6 +19,7 @@ model Cabin {
   status       CabinStatus   @default(AVAILABLE)
   images       String[]      @default([])
   reservations Reservation[]
+  pricing      CabinPricing[] // Nueva relación
 }
 
 model Payment {
@@ -144,4 +145,31 @@ enum UserRole {
 enum UserStatus {
   ACTIVE
   INACTIVE
+}
+
+// Agregar al schema.prisma
+model CabinPricing {
+  id          String           @id @default(uuid())
+  cabinId     String
+  startDate   DateTime
+  endDate     DateTime
+  price       Float
+  priceType   CabinPriceType   @default(CUSTOM)
+  description String?          // Ej: "Temporada Alta", "Navidad", etc.
+  isActive    Boolean          @default(true)
+  priority    Int              @default(1) // Para resolver conflictos
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @default(now()) @updatedAt
+  cabin       Cabin            @relation(fields: [cabinId], references: [id], onDelete: Cascade)
+  
+  @@unique([cabinId, startDate, endDate])
+  @@index([cabinId, startDate, endDate])
+}
+
+enum CabinPriceType {
+  BASE        // Precio base de la cabaña
+  SEASONAL    // Precio por temporada
+  HOLIDAY     // Precio por feriados
+  WEEKEND     // Precio de fin de semana
+  CUSTOM      // Precio personalizado
 }

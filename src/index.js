@@ -50,12 +50,14 @@ const authRoutes = require('./routes/userRoutes');
 const cabinRoutes = require('./routes/cabinRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
 const reservationRoutes = require('./routes/reservationRoutes');
+const pricingRoutes = require('./routes/pricingRoutes');
 
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/cabins', cabinRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/reservations', reservationRoutes);
+app.use('/api/pricing', pricingRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -78,4 +80,4 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`🔗 API URL: http://localhost:${PORT}/api`);
-}); 
+});

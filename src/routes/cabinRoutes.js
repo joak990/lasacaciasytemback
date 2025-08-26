@@ -81,7 +81,8 @@ router.get('/available', async (req, res) => {
         name: true,
         capacity: true,
         price: true,
-        status: true
+        status: true,
+        description: true
       }
     });
 
@@ -126,8 +127,52 @@ router.get('/available', async (req, res) => {
           continue;
         }
 
-        availableCabins.push(cabin);
-        console.log(`✅ Cabaña ${cabin.name} disponible`);
+        // Calcular precio especial para las fechas solicitadas
+        let finalPrice = cabin.price; // Precio base por defecto
+        
+        try {
+          // Buscar precios especiales que se apliquen a las fechas solicitadas
+          const specialPricing = await prisma.cabinPricing.findMany({
+            where: {
+              cabinId: cabin.id,
+              isActive: true,
+              AND: [
+                {
+                  startDate: { lte: checkOutDate }
+                },
+                {
+                  endDate: { gte: checkInDate }
+                }
+              ]
+            },
+            orderBy: {
+              priority: 'desc' // Prioridad más alta primero
+            }
+          });
+
+          if (specialPricing.length > 0) {
+            // Usar el precio especial con mayor prioridad
+            const bestPricing = specialPricing[0];
+            finalPrice = bestPricing.price;
+            console.log(`💰 Cabaña ${cabin.name} - Precio especial aplicado: $${finalPrice} (${bestPricing.priceType})`);
+          } else {
+            console.log(`💰 Cabaña ${cabin.name} - Usando precio base: $${finalPrice}`);
+          }
+        } catch (pricingError) {
+          console.error(`❌ Error calculando precio especial para ${cabin.name}:`, pricingError);
+          // En caso de error, usar precio base
+          finalPrice = cabin.price;
+        }
+
+        // Agregar la cabaña con el precio calculado
+        const cabinWithPricing = {
+          ...cabin,
+          price: finalPrice,
+          originalPrice: cabin.price // Mantener el precio original para referencia
+        };
+
+        availableCabins.push(cabinWithPricing);
+        console.log(`✅ Cabaña ${cabin.name} disponible - Precio final: $${finalPrice}`);
       } else {
         console.log(`❌ Cabaña ${cabin.name} no disponible - Conflicto encontrado`);
       }
@@ -140,6 +185,107 @@ router.get('/available', async (req, res) => {
     console.error('❌ Error buscando cabañas disponibles:', error);
     res.status(500).json({ 
       error: 'Error al buscar cabañas disponibles',
+      details: error.message 
+    });
+  }
+});
+
+// GET /api/cabins/:id/calculate-price - Calcular precio total para una estadía
+router.get('/:id/calculate-price', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { checkIn, checkOut } = req.query;
+    
+    console.log('💰 Calculando precio para cabaña:', { id, checkIn, checkOut });
+
+    // Validar parámetros
+    if (!checkIn || !checkOut) {
+      return res.status(400).json({ 
+        error: 'Fechas de check-in y check-out son requeridas' 
+      });
+    }
+
+    const checkInDate = new Date(checkIn);
+    const checkOutDate = new Date(checkOut);
+
+    if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+      return res.status(400).json({ error: 'Fechas inválidas' });
+    }
+
+    if (checkInDate >= checkOutDate) {
+      return res.status(400).json({ 
+        error: 'Fecha de salida debe ser posterior a la de llegada' 
+      });
+    }
+
+    // Obtener la cabaña
+    const cabin = await prisma.cabin.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        price: true
+      }
+    });
+
+    if (!cabin) {
+      return res.status(404).json({ error: 'Cabaña no encontrada' });
+    }
+
+    // Calcular número de noches
+    const nights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+    
+    // Buscar precios especiales para cada día
+    let totalPrice = 0;
+    const dailyPricing = [];
+
+    for (let i = 0; i < nights; i++) {
+      const currentDate = new Date(checkInDate);
+      currentDate.setDate(currentDate.getDate() + i);
+      
+      // Buscar precio especial para esta fecha
+      const specialPricing = await prisma.cabinPricing.findFirst({
+        where: {
+          cabinId: cabin.id,
+          isActive: true,
+          startDate: { lte: currentDate },
+          endDate: { gte: currentDate }
+        },
+        orderBy: {
+          priority: 'desc'
+        }
+      });
+
+      const dayPrice = specialPricing ? specialPricing.price : cabin.price;
+      totalPrice += dayPrice;
+      
+      dailyPricing.push({
+        date: currentDate.toISOString().split('T')[0],
+        price: dayPrice,
+        isSpecial: !!specialPricing,
+        pricingType: specialPricing ? specialPricing.priceType : 'BASE'
+      });
+    }
+
+    const result = {
+      cabinId: cabin.id,
+      cabinName: cabin.name,
+      checkIn: checkIn,
+      checkOut: checkOut,
+      nights: nights,
+      basePrice: cabin.price,
+      totalPrice: totalPrice,
+      averagePricePerNight: Math.round(totalPrice / nights),
+      dailyPricing: dailyPricing
+    };
+
+    console.log('💰 Precio calculado:', result);
+    res.json(result);
+
+  } catch (error) {
+    console.error('❌ Error calculando precio:', error);
+    res.status(500).json({ 
+      error: 'Error al calcular precio',
       details: error.message 
     });
   }
