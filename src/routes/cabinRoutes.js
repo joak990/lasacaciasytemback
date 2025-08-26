@@ -298,9 +298,27 @@ router.get('/:id', async (req, res) => {
     
     const cabin = await prisma.cabin.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        capacity: true,
+        price: true,
+        amenities: true,
+        description: true,
+        status: true,
+        images: true,
+        createdAt: true,
+        updatedAt: true,
         reservations: {
-          include: {
+          select: {
+            id: true,
+            guestName: true,
+            checkIn: true,
+            checkOut: true,
+            totalPrice: true,
+            status: true,
+            paymentStatus: true,
+            createdAt: true,
             user: {
               select: {
                 id: true,
@@ -310,8 +328,18 @@ router.get('/:id', async (req, res) => {
               }
             },
             reservationServices: {
-              include: {
-                service: true
+              select: {
+                id: true,
+                quantity: true,
+                price: true,
+                service: {
+                  select: {
+                    id: true,
+                    name: true,
+                    price: true,
+                    category: true
+                  }
+                }
               }
             }
           },
@@ -344,7 +372,12 @@ router.post('/:id/images', [
     const { images } = req.body;
 
     const cabin = await prisma.cabin.findUnique({
-      where: { id }
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        images: true
+      }
     });
 
     if (!cabin) {
@@ -399,7 +432,11 @@ router.delete('/:id/images/:imageIndex', async (req, res) => {
     const index = parseInt(imageIndex);
 
     const cabin = await prisma.cabin.findUnique({
-      where: { id }
+      where: { id },
+      select: {
+        id: true,
+        images: true
+      }
     });
 
     if (!cabin) {
@@ -439,7 +476,11 @@ router.put('/:id/images', [
     const { images } = req.body;
 
     const cabin = await prisma.cabin.findUnique({
-      where: { id }
+      where: { id },
+      select: {
+        id: true,
+        images: true
+      }
     });
 
     if (!cabin) {
