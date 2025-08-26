@@ -4,6 +4,12 @@ const prisma = require('../utils/prisma');
 
 const router = express.Router();
 
+// Verificar que prisma esté disponible
+if (!prisma) {
+  console.error('❌ Error: Prisma no está disponible');
+  throw new Error('Prisma client no está disponible');
+}
+
 // Middleware para manejar errores de validación
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
@@ -17,6 +23,11 @@ const handleValidationErrors = (req, res, next) => {
 router.get('/cabin/:cabinId', async (req, res) => {
   try {
     const { cabinId } = req.params;
+    
+    if (!prisma || !prisma.cabinPricing) {
+      console.error('❌ Error: Prisma o cabinPricing no está disponible');
+      return res.status(500).json({ error: 'Error de configuración de base de datos' });
+    }
     
     const pricing = await prisma.cabinPricing.findMany({
       where: { 
@@ -52,8 +63,22 @@ router.post('/', [
 
     console.log('📝 Creando precio:', { cabinId, startDate, endDate, price, priceType, description, priority });
 
-    // Verificar que la cabaña existe
-    const cabin = await prisma.cabin.findUnique({ where: { id: cabinId } });
+    // Verificar que prisma esté disponible
+    if (!prisma || !prisma.cabin) {
+      console.error('❌ Error: Prisma o cabin no está disponible');
+      return res.status(500).json({ error: 'Error de configuración de base de datos' });
+    }
+
+    // Verificar que la cabaña existe - solo seleccionar campos que existen
+    const cabin = await prisma.cabin.findUnique({ 
+      where: { id: cabinId },
+      select: {
+        id: true,
+        name: true,
+        price: true
+      }
+    });
+    
     if (!cabin) {
       return res.status(404).json({ error: 'Cabaña no encontrada' });
     }
@@ -188,7 +213,9 @@ router.get('/calculate', async (req, res) => {
 async function calculateCabinPrice(cabinId, checkIn, checkOut) {
   const cabin = await prisma.cabin.findUnique({
     where: { id: cabinId },
-    include: {
+    select: {
+      id: true,
+      price: true,
       pricing: {
         where: {
           isActive: true,
