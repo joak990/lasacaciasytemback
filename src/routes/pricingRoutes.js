@@ -26,7 +26,8 @@ router.get('/cabin/:cabinId', async (req, res) => {
     
     if (!prisma || !prisma.cabinPricing) {
       console.error('❌ Error: Prisma o cabinPricing no está disponible');
-      return res.status(500).json({ error: 'Error de configuración de base de datos' });
+      console.error('❌ Prisma models disponibles:', Object.keys(prisma || {}));
+      return res.status(500).json({ error: 'Error de configuración de base de datos - CabinPricing no disponible' });
     }
     
     const pricing = await prisma.cabinPricing.findMany({
@@ -81,6 +82,13 @@ router.post('/', [
     
     if (!cabin) {
       return res.status(404).json({ error: 'Cabaña no encontrada' });
+    }
+
+    // Verificar que CabinPricing esté disponible
+    if (!prisma.cabinPricing) {
+      console.error('❌ Error: CabinPricing no está disponible en el cliente de Prisma');
+      console.error('❌ Prisma models disponibles:', Object.keys(prisma));
+      return res.status(500).json({ error: 'Error: Modelo CabinPricing no disponible - Regenerar cliente de Prisma' });
     }
 
     // Verificar conflictos de fechas
@@ -213,9 +221,7 @@ router.get('/calculate', async (req, res) => {
 async function calculateCabinPrice(cabinId, checkIn, checkOut) {
   const cabin = await prisma.cabin.findUnique({
     where: { id: cabinId },
-    select: {
-      id: true,
-      price: true,
+    include: {
       pricing: {
         where: {
           isActive: true,

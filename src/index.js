@@ -1,3 +1,7 @@
+// 🔧 FIX: Regenerar cliente de Prisma para incluir modelo CabinPricing
+// Este cambio fuerza un nuevo build en Render para regenerar el cliente de Prisma
+// después de agregar el modelo CabinPricing al schema
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
