@@ -130,25 +130,16 @@ router.get('/available', async (req, res) => {
         // Calcular precio especial para las fechas solicitadas
         let finalPrice = cabin.price; // Precio base por defecto
         
-        try {
-          // Buscar precios especiales que se apliquen a las fechas solicitadas
-          const specialPricing = await prisma.cabinPricing.findMany({
-            where: {
-              cabinId: cabin.id,
-              isActive: true,
-              AND: [
-                {
-                  startDate: { lte: checkOutDate }
-                },
-                {
-                  endDate: { gte: checkInDate }
-                }
-              ]
-            },
-            orderBy: {
-              priority: 'desc' // Prioridad más alta primero
-            }
-          });
+                 try {
+           // Buscar precios especiales que se apliquen a las fechas solicitadas usando SQL directo
+           const specialPricing = await prisma.$queryRaw`
+             SELECT * FROM "CabinPricing" 
+             WHERE "cabinId" = ${cabin.id}
+             AND "isActive" = true
+             AND "startDate" <= ${checkOutDate}
+             AND "endDate" >= ${checkInDate}
+             ORDER BY "priority" DESC
+           `;
 
           if (specialPricing.length > 0) {
             // Usar el precio especial con mayor prioridad
@@ -243,28 +234,28 @@ router.get('/:id/calculate-price', async (req, res) => {
       const currentDate = new Date(checkInDate);
       currentDate.setDate(currentDate.getDate() + i);
       
-      // Buscar precio especial para esta fecha
-      const specialPricing = await prisma.cabinPricing.findFirst({
-        where: {
-          cabinId: cabin.id,
-          isActive: true,
-          startDate: { lte: currentDate },
-          endDate: { gte: currentDate }
-        },
-        orderBy: {
-          priority: 'desc'
-        }
-      });
+             // Buscar precio especial para esta fecha usando SQL directo
+       const specialPricing = await prisma.$queryRaw`
+         SELECT * FROM "CabinPricing" 
+         WHERE "cabinId" = ${cabin.id}
+         AND "isActive" = true
+         AND "startDate" <= ${currentDate}
+         AND "endDate" >= ${currentDate}
+         ORDER BY "priority" DESC
+         LIMIT 1
+       `;
+       
+       const pricing = specialPricing.length > 0 ? specialPricing[0] : null;
 
-      const dayPrice = specialPricing ? specialPricing.price : cabin.price;
-      totalPrice += dayPrice;
-      
-      dailyPricing.push({
-        date: currentDate.toISOString().split('T')[0],
-        price: dayPrice,
-        isSpecial: !!specialPricing,
-        pricingType: specialPricing ? specialPricing.priceType : 'BASE'
-      });
+             const dayPrice = pricing ? pricing.price : cabin.price;
+       totalPrice += dayPrice;
+       
+       dailyPricing.push({
+         date: currentDate.toISOString().split('T')[0],
+         price: dayPrice,
+         isSpecial: !!pricing,
+         pricingType: pricing ? pricing.priceType : 'BASE'
+       });
     }
 
     const result = {

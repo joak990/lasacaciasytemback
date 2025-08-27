@@ -10,6 +10,60 @@ if (!prisma) {
   throw new Error('Prisma client no está disponible');
 }
 
+// Función temporal para usar CabinPricing con SQL directo
+async function getCabinPricing(cabinId, isActive = true) {
+  try {
+    const pricing = await prisma.$queryRaw`
+      SELECT * FROM "CabinPricing" 
+      WHERE "cabinId" = ${cabinId} 
+      AND "isActive" = ${isActive}
+      ORDER BY "priority" DESC, "startDate" ASC
+    `;
+    return pricing;
+  } catch (error) {
+    console.error('❌ Error en consulta SQL CabinPricing:', error);
+    return [];
+  }
+}
+
+async function createCabinPricing(data) {
+  try {
+    const result = await prisma.$executeRaw`
+      INSERT INTO "CabinPricing" (
+        "id", "cabinId", "startDate", "endDate", "price", 
+        "priceType", "description", "isActive", "priority", 
+        "createdAt", "updatedAt"
+      ) VALUES (
+        gen_random_uuid(), ${data.cabinId}, ${data.startDate}, ${data.endDate}, ${data.price},
+        ${data.priceType}, ${data.description}, ${data.isActive}, ${data.priority},
+        NOW(), NOW()
+      )
+    `;
+    return result;
+  } catch (error) {
+    console.error('❌ Error creando CabinPricing con SQL:', error);
+    throw error;
+  }
+}
+
+async function findConflictingPricing(cabinId, startDate, endDate) {
+  try {
+    const conflicts = await prisma.$queryRaw`
+      SELECT * FROM "CabinPricing" 
+      WHERE "cabinId" = ${cabinId} 
+      AND "isActive" = true
+      AND (
+        ("startDate" <= ${startDate} AND "endDate" >= ${startDate}) OR
+        ("startDate" <= ${endDate} AND "endDate" >= ${endDate})
+      )
+    `;
+    return conflicts.length > 0 ? conflicts[0] : null;
+  } catch (error) {
+    console.error('❌ Error buscando conflictos con SQL:', error);
+    return null;
+  }
+}
+
 // Middleware para manejar errores de validación
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
@@ -24,22 +78,8 @@ router.get('/cabin/:cabinId', async (req, res) => {
   try {
     const { cabinId } = req.params;
     
-    if (!prisma || !prisma.cabinPricing) {
-      console.error('❌ Error: Prisma o cabinPricing no está disponible');
-      console.error('❌ Prisma models disponibles:', Object.keys(prisma || {}));
-      return res.status(500).json({ error: 'Error de configuración de base de datos - CabinPricing no disponible' });
-    }
-    
-    const pricing = await prisma.cabinPricing.findMany({
-      where: { 
-        cabinId,
-        isActive: true
-      },
-      orderBy: [
-        { priority: 'desc' },
-        { startDate: 'asc' }
-      ]
-    });
+    // Usar función temporal con SQL directo
+    const pricing = await getCabinPricing(cabinId);
     
     res.json(pricing);
   } catch (error) {
@@ -84,34 +124,8 @@ router.post('/', [
       return res.status(404).json({ error: 'Cabaña no encontrada' });
     }
 
-    // Verificar que CabinPricing esté disponible
-    if (!prisma.cabinPricing) {
-      console.error('❌ Error: CabinPricing no está disponible en el cliente de Prisma');
-      console.error('❌ Prisma models disponibles:', Object.keys(prisma));
-      return res.status(500).json({ error: 'Error: Modelo CabinPricing no disponible - Regenerar cliente de Prisma' });
-    }
-
-    // Verificar conflictos de fechas
-    const conflictingPricing = await prisma.cabinPricing.findFirst({
-      where: {
-        cabinId,
-        isActive: true,
-        OR: [
-          {
-            AND: [
-              { startDate: { lte: new Date(startDate) } },
-              { endDate: { gte: new Date(startDate) } }
-            ]
-          },
-          {
-            AND: [
-              { startDate: { lte: new Date(endDate) } },
-              { endDate: { gte: new Date(endDate) } }
-            ]
-          }
-        ]
-      }
-    });
+    // Verificar conflictos de fechas usando SQL directo
+    const conflictingPricing = await findConflictingPricing(cabinId, new Date(startDate), new Date(endDate));
 
     if (conflictingPricing) {
       return res.status(400).json({ 
@@ -119,20 +133,27 @@ router.post('/', [
       });
     }
 
-    const newPricing = await prisma.cabinPricing.create({
-      data: {
-        cabinId,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        price: parseFloat(price),
-        priceType,
-        description: description || null,
-        priority: parseInt(priority)
-      }
+    // Crear precio usando SQL directo
+    await createCabinPricing({
+      cabinId,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      price: parseFloat(price),
+      priceType,
+      description: description || null,
+      isActive: true,
+      priority: parseInt(priority)
     });
 
-    console.log('✅ Precio creado:', newPricing);
-    res.status(201).json(newPricing);
+    console.log('✅ Precio creado exitosamente');
+    res.status(201).json({ 
+      message: 'Precio creado exitosamente',
+      cabinId,
+      startDate,
+      endDate,
+      price,
+      priceType
+    });
   } catch (error) {
     console.error('❌ Error creando precio:', error);
     res.status(500).json({ error: 'Error al crear precio' });
