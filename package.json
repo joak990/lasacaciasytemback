@@ -13,6 +13,7 @@
     "db:studio": "prisma studio",
     "db:seed": "node database/seed.js",
     "db:insert-cabins": "node database/insert_cabins_prisma.js",
+    "db:force-regenerate": "node force-prisma-regenerate.js",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:build": "docker-compose build",
