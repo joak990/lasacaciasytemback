@@ -35,7 +35,7 @@ async function createCabinPricing(data) {
         "createdAt", "updatedAt"
       ) VALUES (
         gen_random_uuid(), ${data.cabinId}, ${data.startDate}, ${data.endDate}, ${data.price},
-        ${data.priceType}, ${data.description}, ${data.isActive}, ${data.priority},
+        ${data.priceType}::"CabinPriceType", ${data.description}, ${data.isActive}, ${data.priority},
         NOW(), NOW()
       )
     `;
