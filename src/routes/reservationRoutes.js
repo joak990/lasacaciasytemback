@@ -394,6 +394,36 @@ router.post('/', [
 
     console.log('✅ Cabaña verificada');
 
+    // 🔒 VALIDACIÓN CRÍTICA: Verificar que el precio enviado coincide con el precio real
+    console.log('🔒 Validando precio de la reserva...');
+    console.log('🔒 Precio enviado desde frontend:', totalPrice);
+    console.log('🔒 Precio real de la cabaña:', cabin.price);
+    
+    // Calcular el precio real basado en las noches
+    const nights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+    const expectedTotalPrice = cabin.price * nights;
+    
+    console.log('🔒 Noches calculadas:', nights);
+    console.log('🔒 Precio esperado:', expectedTotalPrice);
+    
+    // Permitir una pequeña diferencia por redondeo (máximo 5 pesos)
+    const priceDifference = Math.abs(parseFloat(totalPrice) - expectedTotalPrice);
+    if (priceDifference > 5) {
+      console.log('❌ Precio manipulado detectado!');
+      console.log('❌ Diferencia de precio:', priceDifference);
+      return res.status(400).json({ 
+        error: 'El precio de la reserva no coincide con el precio real de la cabaña',
+        details: {
+          sentPrice: parseFloat(totalPrice),
+          expectedPrice: expectedTotalPrice,
+          cabinPrice: cabin.price,
+          nights: nights
+        }
+      });
+    }
+    
+    console.log('✅ Validación de precio exitosa');
+
     // Crear la reservación
     console.log('🔍 Intentando crear la reservación en la base de datos...');
     const reservation = await prisma.reservation.create({

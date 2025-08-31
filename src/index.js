@@ -55,6 +55,7 @@ const cabinRoutes = require('./routes/cabinRoutes');
 const serviceRoutes = require('./routes/serviceRoutes');
 const reservationRoutes = require('./routes/reservationRoutes');
 const pricingRoutes = require('./routes/pricingRoutes');
+const botRoutes = require('./routes/botRoutes');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -62,6 +63,7 @@ app.use('/api/cabins', cabinRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/reservations', reservationRoutes);
 app.use('/api/pricing', pricingRoutes);
+app.use('/api/bot', botRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -79,9 +81,46 @@ app.use('*', (req, res) => {
   });
 });
 
+// Función para iniciar el bot
+function startBot() {
+  try {
+    console.log('🤖 Iniciando bot de WhatsApp...');
+    const { spawn } = require('child_process');
+    const path = require('path');
+    
+    const botPath = path.join(__dirname, '../bot/stable-bot.js');
+    const botProcess = spawn('node', [botPath], {
+      stdio: 'inherit',
+      detached: false
+    });
+    
+    botProcess.on('error', (error) => {
+      console.error('❌ Error iniciando bot:', error);
+    });
+    
+    botProcess.on('exit', (code) => {
+      console.log(`🤖 Bot terminado con código: ${code}`);
+      // Reiniciar el bot después de 5 segundos si se cierra
+      setTimeout(() => {
+        console.log('🔄 Reiniciando bot...');
+        startBot();
+      }, 5000);
+    });
+    
+    console.log('✅ Bot iniciado correctamente');
+    return botProcess;
+  } catch (error) {
+    console.error('❌ Error iniciando bot:', error);
+  }
+}
+
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`🔗 API URL: http://localhost:${PORT}/api`);
+  
+  // Iniciar el bot automáticamente
+  console.log('🤖 Iniciando bot de WhatsApp automáticamente...');
+  startBot();
 });

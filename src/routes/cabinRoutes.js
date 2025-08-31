@@ -662,4 +662,93 @@ router.get('/:id/availability', async (req, res) => {
   }
 });
 
+// GET /api/cabins/:id/pricing - Obtener precio especial para fechas específicas
+router.get('/:id/pricing', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { checkIn, checkOut } = req.query;
+
+    if (!checkIn || !checkOut) {
+      return res.status(400).json({ 
+        error: 'Se requieren fechas de check-in y check-out' 
+      });
+    }
+
+    const checkInDate = new Date(checkIn);
+    const checkOutDate = new Date(checkOut);
+
+    console.log('🔍 Buscando precio especial para cabaña:', id);
+    console.log('🔍 Fechas:', { checkIn: checkInDate, checkOut: checkOutDate });
+
+    // Buscar precio especial que se superponga con las fechas
+    const specialPricing = await prisma.cabinPricing.findFirst({
+      where: {
+        cabinId: id,
+        isActive: true,
+        OR: [
+          {
+            AND: [
+              { startDate: { lte: checkInDate } },
+              { endDate: { gt: checkInDate } }
+            ]
+          },
+          {
+            AND: [
+              { startDate: { lt: checkOutDate } },
+              { endDate: { gte: checkOutDate } }
+            ]
+          },
+          {
+            AND: [
+              { startDate: { gte: checkInDate } },
+              { endDate: { lte: checkOutDate } }
+            ]
+          }
+        ]
+      },
+      orderBy: {
+        priority: 'desc' // Prioridad más alta primero
+      }
+    });
+
+    if (specialPricing) {
+      console.log('✅ Precio especial encontrado:', {
+        price: specialPricing.price,
+        type: specialPricing.priceType,
+        description: specialPricing.description
+      });
+      
+      return res.json({
+        price: specialPricing.price,
+        priceType: specialPricing.priceType,
+        description: specialPricing.description,
+        startDate: specialPricing.startDate,
+        endDate: specialPricing.endDate
+      });
+    } else {
+      console.log('ℹ️ No se encontró precio especial, usando precio base');
+      
+      // Obtener precio base de la cabaña
+      const cabin = await prisma.cabin.findUnique({
+        where: { id },
+        select: { price: true }
+      });
+
+      if (!cabin) {
+        return res.status(404).json({ error: 'Cabaña no encontrada' });
+      }
+
+      return res.json({
+        price: cabin.price,
+        priceType: 'BASE',
+        description: 'Precio base'
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Error obteniendo precio especial:', error);
+    res.status(500).json({ error: 'Error al obtener precio especial' });
+  }
+});
+
 module.exports = router; 

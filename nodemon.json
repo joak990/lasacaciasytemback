@@ -1,0 +1,15 @@
+{
+  "watch": ["bot/stable-bot.js"],
+  "ignore": [
+    "*.log",
+    "node_modules/",
+    ".env",
+    "auth_info_*/",
+    "bot-status.json",
+    "bot/auth_info_*/",
+    "bot/*.json"
+  ],
+  "ext": "js",
+  "delay": 1000
+}
+

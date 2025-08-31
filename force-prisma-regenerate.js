@@ -47,3 +47,6 @@ try {
   console.error('❌ Error regenerando cliente de Prisma:', error);
   process.exit(1);
 }
+
+
+

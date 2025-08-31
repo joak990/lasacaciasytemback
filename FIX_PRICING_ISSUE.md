@@ -81,3 +81,6 @@ npx prisma migrate status
 # Verificar la conexión a la base de datos
 npx prisma db pull
 ```
+
+
+
