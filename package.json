@@ -20,7 +20,7 @@
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
     "docker:build": "docker-compose build",
-    "build": "prisma generate"
+    "build": "prisma generate && npm install"
   },
   "keywords": [
     "cabañas",
@@ -38,6 +38,7 @@
     "@nestjs/core": "^11.1.5",
     "@prisma/client": "^5.7.1",
     "@vendia/serverless-express": "^4.12.6",
+    "@whiskeysockets/baileys": "^6.6.0",
     "aws-lambda": "^1.0.7",
     "axios": "^1.11.0",
     "bcryptjs": "^2.4.3",
@@ -50,6 +51,7 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.0",
     "nodemailer": "^7.0.5",
+    "qrcode-terminal": "^0.12.0",
     "twilio": "^5.8.0"
   },
   "devDependencies": {
