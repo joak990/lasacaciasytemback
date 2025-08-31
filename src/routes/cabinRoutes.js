@@ -679,6 +679,7 @@ router.get('/:id/pricing', async (req, res) => {
 
     console.log('🔍 Buscando precio especial para cabaña:', id);
     console.log('🔍 Fechas:', { checkIn: checkInDate, checkOut: checkOutDate });
+    console.log('🔍 Prisma models disponibles:', Object.keys(prisma));
 
     // Buscar precio especial que se superponga con las fechas
     const specialPricing = await prisma.cabinPricing.findFirst({
@@ -747,6 +748,7 @@ router.get('/:id/pricing', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error obteniendo precio especial:', error);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).json({ error: 'Error al obtener precio especial' });
   }
 });

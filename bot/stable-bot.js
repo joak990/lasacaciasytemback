@@ -39,9 +39,9 @@ function checkBotStatus() {
 }
 
 // Configuración del backend
-const BACKEND_URL = process.env.NODE_ENV === 'production' 
+const BACKEND_URL = process.env.BACKEND_URL || (process.env.NODE_ENV === 'production' 
   ? 'https://lasacaciasytemback-1.onrender.com/api'
-  : 'http://localhost:3000/api';
+  : 'http://localhost:3000/api');
 
 // Función para limpiar la sesión y forzar nuevo QR
 function clearSession() {

@@ -10,6 +10,7 @@
     "start:with-bot": "node src/index.js",
     "bot": "node bot/stable-bot.js",
     "bot:dev": "nodemon --config nodemon.json bot/stable-bot.js",
+    "bot:local": "BACKEND_URL=http://localhost:3000/api nodemon --config nodemon.json bot/stable-bot.js",
     "setup": "node setup.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
