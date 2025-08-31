@@ -228,8 +228,10 @@ function formatDateForBackend(date) {
 
 // Función para obtener imágenes de una cabaña específica
 function getCabinImages(cabinName) {
-  // URL base - actualiza esto con tu dominio real
-  const baseUrl = 'http://localhost:3001'; // Cambia por tu dominio cuando lo subas
+  // URL base - dinámica según el entorno
+  const baseUrl = process.env.NODE_ENV === 'production' 
+    ? 'https://lasacaciasistemafront.vercel.app'
+    : 'http://localhost:3001';
   
   const cabinImages = {
     'rosa': [
