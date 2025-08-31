@@ -685,6 +685,16 @@ async function processReservationFlow(user, messageText, sock) {
              return a.capacity - b.capacity; // ninguna exacta, ordenar por capacidad
            });
            
+           // Enviar mensaje inicial con resumen
+           const baseUrl = 'https://lasacaciasistemafront.vercel.app/';
+           
+           await sock.sendMessage(user, { 
+             text: `🏡 **¡Perfecto! Encontré ${sortedCabins.length} cabañas disponibles:**\n\n📅 **Fechas:** ${checkIn.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })} - ${checkOut.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}\n👥 **Personas:** ${session.guestCount}\n\nTe muestro las opciones disponibles:` 
+           });
+           
+           // Pausa antes de enviar las cabañas
+           await new Promise(resolve => setTimeout(resolve, 1000));
+           
            // Enviar cada cabaña con su información y foto
            for (const cabin of sortedCabins) {
             const cabinName = cabin.name.toLowerCase();
@@ -714,8 +724,6 @@ async function processReservationFlow(user, messageText, sock) {
           }
           
           // Enviar mensaje final con opciones
-          const baseUrl = 'https://lasacaciasistemafront.vercel.app/';
-          
           await sock.sendMessage(user, { 
             text: `¿Te gustaría saber más sobre alguna cabaña específica?\n\n🌐 **O ver todas las opciones en la web:**\n• ${baseUrl}` 
           });
