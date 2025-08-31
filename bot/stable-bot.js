@@ -1267,8 +1267,10 @@ async function connectToWhatsApp() {
              
              // SIEMPRE actualizar el número de personas con el último valor mencionado
              if (detectedGuestCount) {
+               console.log(`👥 Usuario ${user}: Detectado ${detectedGuestCount} personas en mensaje: "${messageText}"`);
                session.guestCount = detectedGuestCount;
                userSessions.set(user, session);
+               console.log(`✅ Sesión actualizada: guestCount = ${session.guestCount}`);
              }
             
             // Validar que no se soliciten más de 6 personas
