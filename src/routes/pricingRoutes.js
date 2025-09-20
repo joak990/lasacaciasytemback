@@ -176,19 +176,61 @@ router.put('/:id', [
 
     console.log('📝 Actualizando precio:', { id, updateData });
 
-    // Convertir tipos de datos si están presentes
-    if (updateData.price) updateData.price = parseFloat(updateData.price);
-    if (updateData.startDate) updateData.startDate = new Date(updateData.startDate);
-    if (updateData.endDate) updateData.endDate = new Date(updateData.endDate);
-    if (updateData.priority) updateData.priority = parseInt(updateData.priority);
+    // Construir la consulta SQL dinámicamente
+    const setClauses = [];
+    const values = [];
 
-    const updatedPricing = await prisma.cabinPricing.update({
-      where: { id },
-      data: updateData
-    });
+    if (updateData.price !== undefined) {
+      setClauses.push(`"price" = $${values.length + 1}`);
+      values.push(parseFloat(updateData.price));
+    }
+    if (updateData.startDate !== undefined) {
+      setClauses.push(`"startDate" = $${values.length + 1}`);
+      values.push(new Date(updateData.startDate));
+    }
+    if (updateData.endDate !== undefined) {
+      setClauses.push(`"endDate" = $${values.length + 1}`);
+      values.push(new Date(updateData.endDate));
+    }
+    if (updateData.priceType !== undefined) {
+      setClauses.push(`"priceType" = $${values.length + 1}::"CabinPriceType"`);
+      values.push(updateData.priceType);
+    }
+    if (updateData.description !== undefined) {
+      setClauses.push(`"description" = $${values.length + 1}`);
+      values.push(updateData.description);
+    }
+    if (updateData.priority !== undefined) {
+      setClauses.push(`"priority" = $${values.length + 1}`);
+      values.push(parseInt(updateData.priority));
+    }
+    if (updateData.isActive !== undefined) {
+      setClauses.push(`"isActive" = $${values.length + 1}`);
+      values.push(updateData.isActive);
+    }
 
-    console.log('✅ Precio actualizado:', updatedPricing);
-    res.json(updatedPricing);
+    if (setClauses.length === 0) {
+      return res.status(400).json({ error: 'No hay datos para actualizar' });
+    }
+
+    setClauses.push(`"updatedAt" = NOW()`);
+    values.push(id);
+
+    const query = `
+      UPDATE "CabinPricing" 
+      SET ${setClauses.join(', ')}
+      WHERE "id" = $${values.length}
+      RETURNING *
+    `;
+
+    const result = await prisma.$queryRawUnsafe(query, ...values);
+
+    if (result.length === 0) {
+      return res.status(404).json({ error: 'Precio no encontrado' });
+    }
+
+    console.log('✅ Precio actualizado:', result[0]);
+    res.json(result[0]);
   } catch (error) {
     console.error('❌ Error actualizando precio:', error);
     res.status(500).json({ error: 'Error al actualizar precio' });
@@ -202,9 +244,15 @@ router.delete('/:id', async (req, res) => {
 
     console.log('🗑️ Eliminando precio:', id);
 
-    await prisma.cabinPricing.delete({
-      where: { id }
-    });
+    // Usar SQL directo para eliminar el precio
+    const result = await prisma.$executeRaw`
+      DELETE FROM "CabinPricing" 
+      WHERE "id" = ${id}
+    `;
+
+    if (result === 0) {
+      return res.status(404).json({ error: 'Precio no encontrado' });
+    }
 
     console.log('✅ Precio eliminado correctamente');
     res.json({ message: 'Precio eliminado correctamente' });
