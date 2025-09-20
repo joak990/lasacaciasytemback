@@ -1,5 +1,6 @@
 const nodemailer = require('nodemailer');
 const smsService = require('./smsService');
+const pdfService = require('./pdfService');
 
 class NotificationService {
   constructor() {
@@ -110,6 +111,26 @@ class NotificationService {
     try {
       console.log('📧 Enviando email de confirmación de pago al huésped...');
       
+      // Generar PDF de confirmación
+      let pdfAttachment = null;
+      try {
+        console.log('📄 Generando PDF de confirmación...');
+        const pdfResult = await pdfService.generateAndSavePDF(
+          reservation, 
+          cabin, 
+          `confirmacion_${reservation.id.slice(-8)}.pdf`
+        );
+        pdfAttachment = {
+          filename: `Confirmacion_Reserva_${reservation.id.slice(-8).toUpperCase()}.pdf`,
+          content: pdfResult.buffer,
+          contentType: 'application/pdf'
+        };
+        console.log('✅ PDF generado exitosamente');
+      } catch (pdfError) {
+        console.error('⚠️ Error generando PDF, enviando solo email HTML:', pdfError);
+        // Continuar sin PDF si hay error
+      }
+      
       const mailOptions = {
         from: process.env.EMAIL_USER || 'lasacaciasrefugio@gmail.com',
         to: reservation.guestEmail,
@@ -133,6 +154,15 @@ class NotificationService {
                 <h2 style="color: #1f2937; margin: 0 0 10px 0; font-size: 24px;">¡Reserva Confirmada!</h2>
                 <p style="color: #6b7280; margin: 0; font-size: 16px;">Hola ${reservation.guestName}, tu pago ha sido procesado y tu reserva está confirmada.</p>
               </div>
+
+              <!-- PDF Notice -->
+              ${pdfAttachment ? `
+              <div style="background-color: #e0f2fe; border: 2px solid #0288d1; border-radius: 8px; padding: 15px; margin-bottom: 20px; text-align: center;">
+                <p style="margin: 0; color: #01579b; font-weight: bold;">
+                  📄 <strong>¡Importante!</strong> Adjuntamos tu comprobante de reserva en PDF para que puedas imprimirlo o guardarlo.
+                </p>
+              </div>
+              ` : ''}
 
               <!-- Reservation Details -->
               <div style="background-color: #f8f9fa; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
@@ -191,7 +221,8 @@ class NotificationService {
               </p>
             </div>
           </div>
-        `
+        `,
+        attachments: pdfAttachment ? [pdfAttachment] : []
       };
 
       console.log('📧 Enviando email...');
