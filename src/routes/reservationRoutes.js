@@ -1080,10 +1080,10 @@ router.post('/:id/send-confirmation', async (req, res) => {
     console.log('📧 EMAIL_PASSWORD configurado:', !!process.env.EMAIL_PASSWORD);
     console.log('📧 Email destinatario:', reservation.guestEmail);
     
-    // Enviar email con timeout
+    // Enviar email con timeout más corto (30 segundos ya que el servicio tiene su propio timeout)
     const emailPromise = notificationService.sendPaymentConfirmationEmail(reservation, reservation.cabin);
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Timeout: El envío de email tardó más de 45 segundos')), 45000)
+      setTimeout(() => reject(new Error('Timeout: El envío de email tardó más de 35 segundos')), 35000)
     );
     
     const result = await Promise.race([emailPromise, timeoutPromise]);

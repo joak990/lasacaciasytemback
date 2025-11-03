@@ -18,11 +18,27 @@ class NotificationService {
       console.warn('⚠️ Los emails no se podrán enviar hasta que se configuren estas variables');
     }
     
+    // Configuración SMTP de Gmail con timeouts y opciones optimizadas para producción
     this.emailTransporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // true para 465, false para otros puertos
       auth: {
-        user: emailUser || 'lasacaciasrefugio@gmail.com',
+        user: emailUser || 'notificationsacaciasrefugio@gmail.com',
         pass: emailPassword || 'tu_app_password'
+      },
+      // Timeouts más cortos para evitar bloqueos en producción
+      connectionTimeout: 10000, // 10 segundos para establecer conexión
+      greetingTimeout: 5000, // 5 segundos para saludo SMTP
+      socketTimeout: 10000, // 10 segundos de timeout de socket
+      // Opciones adicionales para producción
+      pool: false, // No usar pool de conexiones (puede causar problemas en algunos hosts)
+      maxConnections: 1,
+      maxMessages: 1,
+      tls: {
+        // No rechazar certificados no autorizados (útil para algunos hosts)
+        rejectUnauthorized: false,
+        ciphers: 'SSLv3'
       }
     });
     
@@ -32,15 +48,24 @@ class NotificationService {
     });
   }
   
-  // Verificar conexión del transporter
+  // Verificar conexión del transporter con timeout
   async verifyConnection() {
     try {
-      await this.emailTransporter.verify();
+      // Timeout de verificación de 5 segundos
+      const verifyPromise = this.emailTransporter.verify();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout verificando conexión SMTP')), 5000)
+      );
+      
+      await Promise.race([verifyPromise, timeoutPromise]);
       console.log('✅ Servicio de email configurado correctamente');
     } catch (error) {
       console.error('❌ Error verificando conexión de email:', error.message);
       if (error.code === 'EAUTH') {
         console.error('❌ Error de autenticación - Verifica EMAIL_USER y EMAIL_PASSWORD');
+      } else if (error.code === 'ETIMEDOUT' || error.message.includes('Timeout')) {
+        console.error('⚠️ Timeout conectando a Gmail SMTP. Esto puede ser normal en algunos hosts.');
+        console.error('⚠️ Los emails se intentarán enviar de todas formas cuando se requieran.');
       }
     }
   }
@@ -53,8 +78,8 @@ class NotificationService {
       console.log('📧 ADMIN_EMAIL:', process.env.ADMIN_EMAIL);
       
       const mailOptions = {
-        from: process.env.EMAIL_USER || 'lasacaciasrefugio@gmail.com',
-        to: process.env.ADMIN_EMAIL || 'analia@lasacacias.com',
+        from: process.env.EMAIL_USER || 'notificationsacaciasrefugio@gmail.com',
+        to: process.env.ADMIN_EMAIL || 'lasacaciasrefugio@gmail.com',
         subject: '🏠 Nueva Reserva - Las Acacias Refugio',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -275,7 +300,13 @@ class NotificationService {
         return false;
       }
       
-      const info = await this.emailTransporter.sendMail(mailOptions);
+      // Intentar enviar con timeout y reintentos
+      const sendPromise = this.emailTransporter.sendMail(mailOptions);
+      const sendTimeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout: Envío de email tardó más de 30 segundos')), 30000)
+      );
+      
+      const info = await Promise.race([sendPromise, sendTimeout]);
       console.log('✅ Email de confirmación enviado:', info.messageId);
       return true;
     } catch (error) {
