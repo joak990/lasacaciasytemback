@@ -2,6 +2,16 @@ const puppeteer = require('puppeteer');
 const path = require('path');
 const fs = require('fs');
 
+// Verificar si Puppeteer puede funcionar correctamente
+let PUPPETEER_AVAILABLE = true;
+try {
+  // Verificar que puppeteer puede ser requerido sin errores
+  require('puppeteer');
+} catch (error) {
+  console.warn('⚠️ Puppeteer no está disponible, los PDFs estarán deshabilitados');
+  PUPPETEER_AVAILABLE = false;
+}
+
 class PDFService {
   constructor() {
     this.logoPath = path.join(__dirname, '../../public/logo.jpg');
@@ -402,53 +412,101 @@ class PDFService {
 
   // Generar PDF de confirmación
   async generateConfirmationPDF(reservation, cabin) {
+    // Si Puppeteer no está disponible, lanzar error inmediatamente
+    if (!PUPPETEER_AVAILABLE) {
+      throw new Error('Puppeteer no está disponible');
+    }
+    
     let browser;
     try {
-      console.log('📄 Generando PDF de confirmación...');
+      console.log('📄 Iniciando generación de PDF...');
       
-      // Lanzar navegador
-      browser = await puppeteer.launch({
+      // En Windows, Puppeteer puede tener problemas. Intentamos con configuración específica
+      const launchOptions = {
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      });
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--disable-software-rasterizer',
+          '--disable-extensions',
+          '--disable-web-security',
+          '--disable-features=IsolateOrigins,site-per-process'
+        ],
+        timeout: 8000, // Timeout más corto: 8 segundos
+        // En Windows, a veces ayuda especificar el ejecutable
+        ...(process.platform === 'win32' && {
+          executablePath: undefined // Dejar que Puppeteer encuentre su Chromium
+        })
+      };
+      
+      // Intentar lanzar con timeout
+      const launchPromise = puppeteer.launch(launchOptions);
+      const launchTimeout = new Promise((_, reject) => 
+        setTimeout(() => {
+          reject(new Error('Timeout: Puppeteer no pudo iniciar el navegador en 8 segundos. Esto es común en Windows. El email se enviará sin PDF.'));
+        }, 8000)
+      );
+      
+      browser = await Promise.race([launchPromise, launchTimeout]);
+      console.log('✅ Navegador iniciado');
       
       const page = await browser.newPage();
+      console.log('✅ Página creada');
       
       // Generar HTML
       const html = this.generateConfirmationHTML(reservation, cabin);
+      console.log('✅ HTML generado');
       
-      // Establecer contenido
-      await page.setContent(html, { waitUntil: 'networkidle0' });
+      // Establecer contenido con timeout más corto
+      await Promise.race([
+        page.setContent(html, { waitUntil: 'load', timeout: 5000 }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout loading HTML')), 5000))
+      ]);
+      console.log('✅ Contenido cargado en página');
       
-      // Generar PDF
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: {
-          top: '20mm',
-          right: '20mm',
-          bottom: '20mm',
-          left: '20mm'
-        },
-        displayHeaderFooter: true,
-        headerTemplate: '<div></div>',
-        footerTemplate: `
-          <div style="font-size: 10px; text-align: center; width: 100%; color: #666;">
-            <span>Las Acacias Refugio - Reserva #${reservation.id.slice(-8).toUpperCase()}</span>
-            <span style="float: right;">Página <span class="pageNumber"></span> de <span class="totalPages"></span></span>
-          </div>
-        `
-      });
+      // Generar PDF con timeout más corto
+      const pdfBuffer = await Promise.race([
+        page.pdf({
+          format: 'A4',
+          printBackground: true,
+          margin: {
+            top: '20mm',
+            right: '20mm',
+            bottom: '20mm',
+            left: '20mm'
+          },
+          displayHeaderFooter: true,
+          headerTemplate: '<div></div>',
+          footerTemplate: `
+            <div style="font-size: 10px; text-align: center; width: 100%; color: #666;">
+              <span>Las Acacias Refugio - Reserva #${reservation.id.slice(-8).toUpperCase()}</span>
+              <span style="float: right;">Página <span class="pageNumber"></span> de <span class="totalPages"></span></span>
+            </div>
+          `,
+          timeout: 5000
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout generando PDF')), 5000))
+      ]);
       
       console.log('✅ PDF generado exitosamente');
       return pdfBuffer;
       
     } catch (error) {
-      console.error('❌ Error generando PDF:', error);
+      console.error('❌ Error generando PDF:', error.message || error);
       throw error;
     } finally {
+      // Cerrar browser de forma segura con timeout
       if (browser) {
-        await browser.close();
+        try {
+          await Promise.race([
+            browser.close(),
+            new Promise((resolve) => setTimeout(resolve, 2000)) // Timeout de 2 segundos para cerrar
+          ]);
+        } catch (closeError) {
+          console.warn('⚠️ Error cerrando navegador (no crítico):', closeError.message);
+        }
       }
     }
   }

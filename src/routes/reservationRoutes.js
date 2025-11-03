@@ -1044,8 +1044,12 @@ router.put('/:id/status', async (req, res) => {
 
 // POST /api/reservations/:id/send-confirmation - Enviar correo de confirmación
 router.post('/:id/send-confirmation', async (req, res) => {
+  // Configurar timeout de 60 segundos
+  req.setTimeout(60000);
+  
   try {
     const { id } = req.params;
+    console.log(`📧 Iniciando envío de confirmación para reserva: ${id}`);
     
     const reservation = await prisma.reservation.findUnique({
       where: { id },
@@ -1076,7 +1080,13 @@ router.post('/:id/send-confirmation', async (req, res) => {
     console.log('📧 EMAIL_PASSWORD configurado:', !!process.env.EMAIL_PASSWORD);
     console.log('📧 Email destinatario:', reservation.guestEmail);
     
-    const result = await notificationService.sendPaymentConfirmationEmail(reservation, reservation.cabin);
+    // Enviar email con timeout
+    const emailPromise = notificationService.sendPaymentConfirmationEmail(reservation, reservation.cabin);
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Timeout: El envío de email tardó más de 45 segundos')), 45000)
+    );
+    
+    const result = await Promise.race([emailPromise, timeoutPromise]);
     
     if (result) {
       // Actualizar el estado de la reserva a CONFIRMED
@@ -1101,9 +1111,18 @@ router.post('/:id/send-confirmation', async (req, res) => {
   } catch (error) {
     console.error('❌ Error enviando correo de confirmación:', error);
     console.error('❌ Error stack:', error.stack);
+    
+    // Si es un error de timeout, devolver respuesta más clara
+    if (error.message && error.message.includes('Timeout')) {
+      return res.status(504).json({ 
+        error: 'Timeout al enviar correo',
+        details: 'El envío del correo está tardando demasiado. Puede que el servicio de email esté lento o haya un problema con la generación del PDF. Verifica los logs del servidor.'
+      });
+    }
+    
     res.status(500).json({ 
       error: 'Error al enviar correo de confirmación',
-      details: error.message 
+      details: error.message || 'Error desconocido'
     });
   }
 });

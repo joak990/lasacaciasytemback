@@ -137,24 +137,40 @@ class NotificationService {
     try {
       console.log('📧 Enviando email de confirmación de pago al huésped...');
       
-      // Generar PDF de confirmación
+      // Generar PDF de confirmación solo si está habilitado
+      // El PDF es completamente opcional - si está deshabilitado o falla, se envía solo el email HTML
       let pdfAttachment = null;
-      try {
-        console.log('📄 Generando PDF de confirmación...');
-        const pdfResult = await pdfService.generateAndSavePDF(
-          reservation, 
-          cabin, 
-          `confirmacion_${reservation.id.slice(-8)}.pdf`
-        );
-        pdfAttachment = {
-          filename: `Confirmacion_Reserva_${reservation.id.slice(-8).toUpperCase()}.pdf`,
-          content: pdfResult.buffer,
-          contentType: 'application/pdf'
-        };
-        console.log('✅ PDF generado exitosamente');
-      } catch (pdfError) {
-        console.error('⚠️ Error generando PDF, enviando solo email HTML:', pdfError);
-        // Continuar sin PDF si hay error
+      const enablePDF = process.env.ENABLE_PDF === 'true' || process.env.ENABLE_PDF === '1';
+      
+      if (enablePDF) {
+        try {
+          console.log('📄 Intentando generar PDF de confirmación (máximo 8 segundos)...');
+          
+          // Timeout más corto de 8 segundos para no bloquear el envío del email
+          const pdfPromise = pdfService.generateAndSavePDF(
+            reservation, 
+            cabin, 
+            `confirmacion_${reservation.id.slice(-8)}.pdf`
+          );
+          const pdfTimeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout: PDF tardó más de 8 segundos')), 8000)
+          );
+          
+          const pdfResult = await Promise.race([pdfPromise, pdfTimeout]);
+          
+          pdfAttachment = {
+            filename: `Confirmacion_Reserva_${reservation.id.slice(-8).toUpperCase()}.pdf`,
+            content: pdfResult.buffer,
+            contentType: 'application/pdf'
+          };
+          console.log('✅ PDF generado exitosamente');
+        } catch (pdfError) {
+          console.warn('⚠️ No se pudo generar el PDF (continúa sin PDF):', pdfError.message || pdfError);
+          console.warn('⚠️ El email se enviará sin el archivo PDF adjunto');
+          // Continuar sin PDF - no es crítico para el envío del email
+        }
+      } else {
+        console.log('📄 Generación de PDF deshabilitada (ENABLE_PDF=false). Enviando solo email HTML.');
       }
       
       const mailOptions = {
