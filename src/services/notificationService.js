@@ -10,13 +10,39 @@ class NotificationService {
 
   // Inicializar servicio de email
   initEmailService() {
+    const emailUser = process.env.EMAIL_USER;
+    const emailPassword = process.env.EMAIL_PASSWORD;
+    
+    if (!emailUser || !emailPassword) {
+      console.warn('⚠️ EMAIL_USER o EMAIL_PASSWORD no están configurados en las variables de entorno');
+      console.warn('⚠️ Los emails no se podrán enviar hasta que se configuren estas variables');
+    }
+    
     this.emailTransporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
-        user: process.env.EMAIL_USER || 'lasacaciasrefugio@gmail.com',
-        pass: process.env.EMAIL_PASSWORD || 'tu_app_password'
+        user: emailUser || 'lasacaciasrefugio@gmail.com',
+        pass: emailPassword || 'tu_app_password'
       }
     });
+    
+    // Verificar conexión al inicializar (sin await, corre en background)
+    this.verifyConnection().catch(err => {
+      // Ya se maneja el error en verifyConnection
+    });
+  }
+  
+  // Verificar conexión del transporter
+  async verifyConnection() {
+    try {
+      await this.emailTransporter.verify();
+      console.log('✅ Servicio de email configurado correctamente');
+    } catch (error) {
+      console.error('❌ Error verificando conexión de email:', error.message);
+      if (error.code === 'EAUTH') {
+        console.error('❌ Error de autenticación - Verifica EMAIL_USER y EMAIL_PASSWORD');
+      }
+    }
   }
 
   // Enviar email de notificación
@@ -225,12 +251,25 @@ class NotificationService {
         attachments: pdfAttachment ? [pdfAttachment] : []
       };
 
-      console.log('📧 Enviando email...');
+      console.log('📧 Enviando email de confirmación...');
+      
+      // Verificar que el transporter esté configurado
+      if (!this.emailTransporter) {
+        console.error('❌ Email transporter no está inicializado');
+        return false;
+      }
+      
       const info = await this.emailTransporter.sendMail(mailOptions);
       console.log('✅ Email de confirmación enviado:', info.messageId);
       return true;
     } catch (error) {
-      console.error('❌ Error enviando email de confirmación:', error);
+      console.error('❌ Error enviando email de confirmación:', error.message);
+      if (error.code === 'EAUTH') {
+        console.error('❌ Error de autenticación Gmail - Verifica que EMAIL_PASSWORD sea una contraseña de aplicación válida');
+      } else if (error.code === 'ECONNECTION') {
+        console.error('❌ Error de conexión - Verifica tu conexión a internet');
+      }
+      console.error('❌ Error completo:', error);
       return false;
     }
   }
@@ -275,11 +314,25 @@ class NotificationService {
         `
       };
   
+      console.log('📧 Enviando email de cancelación...');
+      
+      // Verificar que el transporter esté configurado
+      if (!this.emailTransporter) {
+        console.error('❌ Email transporter no está inicializado');
+        return false;
+      }
+      
       const info = await this.emailTransporter.sendMail(mailOptions);
       console.log('✅ Email de cancelación enviado:', info.messageId);
       return true;
     } catch (error) {
-      console.error('❌ Error enviando email de cancelación:', error);
+      console.error('❌ Error enviando email de cancelación:', error.message);
+      if (error.code === 'EAUTH') {
+        console.error('❌ Error de autenticación Gmail - Verifica que EMAIL_PASSWORD sea una contraseña de aplicación válida');
+      } else if (error.code === 'ECONNECTION') {
+        console.error('❌ Error de conexión - Verifica tu conexión a internet');
+      }
+      console.error('❌ Error completo:', error);
       return false;
     }
   }

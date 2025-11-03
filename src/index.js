@@ -120,7 +120,12 @@ app.listen(PORT, () => {
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`🔗 API URL: http://localhost:${PORT}/api`);
   
-  // Iniciar el bot automáticamente
-  console.log('🤖 Iniciando bot de WhatsApp automáticamente...');
-  startBot();
+  // Iniciar el bot solo si ENABLE_BOT está configurado en .env
+  const enableBot = process.env.ENABLE_BOT === 'true' || process.env.ENABLE_BOT === '1';
+  if (enableBot) {
+    console.log('🤖 Iniciando bot de WhatsApp automáticamente...');
+    startBot();
+  } else {
+    console.log('🤖 Bot de WhatsApp deshabilitado (configura ENABLE_BOT=true en .env para habilitarlo)');
+  }
 });
