@@ -18,27 +18,25 @@ class NotificationService {
       console.warn('⚠️ Los emails no se podrán enviar hasta que se configuren estas variables');
     }
     
-    // Configuración SMTP de Gmail con timeouts y opciones optimizadas para producción
+     // Configuración SMTP de Gmail con timeouts optimizados para Render y producción
     this.emailTransporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // true para 465, false para otros puertos
+      service: 'gmail', // Usar servicio 'gmail' para mejor compatibilidad
       auth: {
         user: emailUser || 'notificationsacaciasrefugio@gmail.com',
         pass: emailPassword || 'tu_app_password'
       },
-      // Timeouts más cortos para evitar bloqueos en producción
-      connectionTimeout: 10000, // 10 segundos para establecer conexión
-      greetingTimeout: 5000, // 5 segundos para saludo SMTP
-      socketTimeout: 10000, // 10 segundos de timeout de socket
+      // Timeouts aumentados para Render (conexiones más lentas)
+      connectionTimeout: 30000, // 30 segundos para establecer conexión (aumentado desde 10s)
+      greetingTimeout: 15000, // 15 segundos para saludo SMTP (aumentado desde 5s)
+      socketTimeout: 30000, // 30 segundos de timeout de socket (aumentado desde 10s)
       // Opciones adicionales para producción
       pool: false, // No usar pool de conexiones (puede causar problemas en algunos hosts)
       maxConnections: 1,
       maxMessages: 1,
       tls: {
-        // No rechazar certificados no autorizados (útil para algunos hosts)
-        rejectUnauthorized: false,
-        ciphers: 'SSLv3'
+        // No rechazar certificados no autorizados (necesario para algunos hosts como Render)
+        rejectUnauthorized: false
+        // Removido ciphers: 'SSLv3' - es inseguro y puede causar problemas
       }
     });
     
@@ -51,10 +49,10 @@ class NotificationService {
   // Verificar conexión del transporter con timeout
   async verifyConnection() {
     try {
-      // Timeout de verificación de 5 segundos
+      // Timeout de verificación aumentado a 20 segundos para Render
       const verifyPromise = this.emailTransporter.verify();
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout verificando conexión SMTP')), 5000)
+        setTimeout(() => reject(new Error('Timeout verificando conexión SMTP')), 20000)
       );
       
       await Promise.race([verifyPromise, timeoutPromise]);
@@ -300,10 +298,10 @@ class NotificationService {
         return false;
       }
       
-      // Intentar enviar con timeout y reintentos
+      // Intentar enviar con timeout aumentado para Render
       const sendPromise = this.emailTransporter.sendMail(mailOptions);
       const sendTimeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout: Envío de email tardó más de 30 segundos')), 30000)
+        setTimeout(() => reject(new Error('Timeout: Envío de email tardó más de 45 segundos')), 45000)
       );
       
       const info = await Promise.race([sendPromise, sendTimeout]);
@@ -369,7 +367,13 @@ class NotificationService {
         return false;
       }
       
-      const info = await this.emailTransporter.sendMail(mailOptions);
+      // Intentar enviar con timeout aumentado para Render
+      const sendPromise = this.emailTransporter.sendMail(mailOptions);
+      const sendTimeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout: Envío de email tardó más de 45 segundos')), 45000)
+      );
+      
+      const info = await Promise.race([sendPromise, sendTimeout]);
       console.log('✅ Email de cancelación enviado:', info.messageId);
       return true;
     } catch (error) {

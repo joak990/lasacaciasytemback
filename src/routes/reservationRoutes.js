@@ -1044,12 +1044,8 @@ router.put('/:id/status', async (req, res) => {
 
 // POST /api/reservations/:id/send-confirmation - Enviar correo de confirmación
 router.post('/:id/send-confirmation', async (req, res) => {
-  // Configurar timeout de 60 segundos
-  req.setTimeout(60000);
-  
   try {
     const { id } = req.params;
-    console.log(`📧 Iniciando envío de confirmación para reserva: ${id}`);
     
     const reservation = await prisma.reservation.findUnique({
       where: { id },
@@ -1075,55 +1071,16 @@ router.post('/:id/send-confirmation', async (req, res) => {
       return res.status(400).json({ error: 'La reserva no tiene un correo electrónico asociado' });
     }
     
-    console.log('📧 Intentando enviar email de confirmación...');
-    console.log('📧 EMAIL_USER configurado:', !!process.env.EMAIL_USER);
-    console.log('📧 EMAIL_PASSWORD configurado:', !!process.env.EMAIL_PASSWORD);
-    console.log('📧 Email destinatario:', reservation.guestEmail);
-    
-    // Enviar email con timeout más corto (30 segundos ya que el servicio tiene su propio timeout)
-    const emailPromise = notificationService.sendPaymentConfirmationEmail(reservation, reservation.cabin);
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Timeout: El envío de email tardó más de 35 segundos')), 35000)
-    );
-    
-    const result = await Promise.race([emailPromise, timeoutPromise]);
+    const result = await notificationService.sendPaymentConfirmationEmail(reservation, reservation.cabin);
     
     if (result) {
-      // Actualizar el estado de la reserva a CONFIRMED
-      console.log('✅ Email enviado exitosamente, actualizando estado a CONFIRMED...');
-      await prisma.reservation.update({
-        where: { id },
-        data: { status: 'CONFIRMED' }
-      });
-      
-      res.json({ 
-        success: true, 
-        message: 'Correo de confirmación enviado exitosamente y reserva confirmada',
-        status: 'CONFIRMED'
-      });
+      res.json({ success: true, message: 'Correo de confirmación enviado exitosamente' });
     } else {
-      console.error('❌ Error al enviar email de confirmación');
-      res.status(500).json({ 
-        error: 'Error al enviar correo de confirmación',
-        details: 'Verifica la configuración de EMAIL_USER y EMAIL_PASSWORD en las variables de entorno'
-      });
+      res.status(500).json({ error: 'Error al enviar correo de confirmación' });
     }
   } catch (error) {
-    console.error('❌ Error enviando correo de confirmación:', error);
-    console.error('❌ Error stack:', error.stack);
-    
-    // Si es un error de timeout, devolver respuesta más clara
-    if (error.message && error.message.includes('Timeout')) {
-      return res.status(504).json({ 
-        error: 'Timeout al enviar correo',
-        details: 'El envío del correo está tardando demasiado. Puede que el servicio de email esté lento o haya un problema con la generación del PDF. Verifica los logs del servidor.'
-      });
-    }
-    
-    res.status(500).json({ 
-      error: 'Error al enviar correo de confirmación',
-      details: error.message || 'Error desconocido'
-    });
+    console.error('Error enviando correo de confirmación:', error);
+    res.status(500).json({ error: 'Error al enviar correo de confirmación' });
   }
 });
 
@@ -1156,40 +1113,16 @@ router.post('/:id/send-cancellation', async (req, res) => {
       return res.status(400).json({ error: 'La reserva no tiene un correo electrónico asociado' });
     }
     
-    console.log('📧 Intentando enviar email de cancelación...');
-    console.log('📧 EMAIL_USER configurado:', !!process.env.EMAIL_USER);
-    console.log('📧 EMAIL_PASSWORD configurado:', !!process.env.EMAIL_PASSWORD);
-    console.log('📧 Email destinatario:', reservation.guestEmail);
-    
     const result = await notificationService.sendCancellationEmail(reservation, reservation.cabin);
     
     if (result) {
-      // Actualizar el estado de la reserva a CANCELLED
-      console.log('✅ Email enviado exitosamente, actualizando estado a CANCELLED...');
-      await prisma.reservation.update({
-        where: { id },
-        data: { status: 'CANCELLED' }
-      });
-      
-      res.json({ 
-        success: true, 
-        message: 'Correo de cancelación enviado exitosamente y reserva cancelada',
-        status: 'CANCELLED'
-      });
+      res.json({ success: true, message: 'Correo de cancelación enviado exitosamente' });
     } else {
-      console.error('❌ Error al enviar email de cancelación');
-      res.status(500).json({ 
-        error: 'Error al enviar correo de cancelación',
-        details: 'Verifica la configuración de EMAIL_USER y EMAIL_PASSWORD en las variables de entorno'
-      });
+      res.status(500).json({ error: 'Error al enviar correo de cancelación' });
     }
   } catch (error) {
-    console.error('❌ Error enviando correo de cancelación:', error);
-    console.error('❌ Error stack:', error.stack);
-    res.status(500).json({ 
-      error: 'Error al enviar correo de cancelación',
-      details: error.message 
-    });
+    console.error('Error enviando correo de cancelación:', error);
+    res.status(500).json({ error: 'Error al enviar correo de cancelación' });
   }
 });
 
