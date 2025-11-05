@@ -18,27 +18,37 @@ class NotificationService {
       console.warn('⚠️ Los emails no se podrán enviar hasta que se configuren estas variables');
     }
     
-     // Configuración SMTP de Gmail con timeouts optimizados para Render y producción
-    this.emailTransporter = nodemailer.createTransport({
-      service: 'gmail', // Usar servicio 'gmail' para mejor compatibilidad
+    // Configuración SMTP de Gmail optimizada para Render
+    // Probar primero con puerto 465 (SMTPS) que es más común en plataformas cloud
+    // Si falla, intentaremos con 587 (STARTTLS)
+    const smtpConfig = {
+      host: 'smtp.gmail.com',
+      port: 465, // Usar puerto 465 (SMTPS) que funciona mejor en Render
+      secure: true, // true para puerto 465, requiere SSL desde el inicio
       auth: {
         user: emailUser || 'notificationsacaciasrefugio@gmail.com',
         pass: emailPassword || 'tu_app_password'
       },
       // Timeouts aumentados para Render (conexiones más lentas)
-      connectionTimeout: 30000, // 30 segundos para establecer conexión (aumentado desde 10s)
-      greetingTimeout: 15000, // 15 segundos para saludo SMTP (aumentado desde 5s)
-      socketTimeout: 30000, // 30 segundos de timeout de socket (aumentado desde 10s)
-      // Opciones adicionales para producción
-      pool: false, // No usar pool de conexiones (puede causar problemas en algunos hosts)
+      connectionTimeout: 60000, // 60 segundos para establecer conexión
+      greetingTimeout: 30000, // 30 segundos para saludo SMTP
+      socketTimeout: 60000, // 60 segundos de timeout de socket
+      // Opciones adicionales para Render
+      pool: false, // No usar pool de conexiones
       maxConnections: 1,
       maxMessages: 1,
+      requireTLS: true,
       tls: {
-        // No rechazar certificados no autorizados (necesario para algunos hosts como Render)
-        rejectUnauthorized: false
-        // Removido ciphers: 'SSLv3' - es inseguro y puede causar problemas
-      }
-    });
+        // No rechazar certificados no autorizados (necesario para Render)
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2'
+      },
+      // Opciones de debug (solo en desarrollo)
+      debug: process.env.NODE_ENV === 'development',
+      logger: process.env.NODE_ENV === 'development'
+    };
+    
+    this.emailTransporter = nodemailer.createTransport(smtpConfig);
     
     // Verificar conexión al inicializar (sin await, corre en background)
     this.verifyConnection().catch(err => {
@@ -49,21 +59,32 @@ class NotificationService {
   // Verificar conexión del transporter con timeout
   async verifyConnection() {
     try {
-      // Timeout de verificación aumentado a 20 segundos para Render
+      // Timeout de verificación aumentado a 30 segundos para Render
       const verifyPromise = this.emailTransporter.verify();
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout verificando conexión SMTP')), 20000)
+        setTimeout(() => reject(new Error('Timeout verificando conexión SMTP')), 30000)
       );
       
       await Promise.race([verifyPromise, timeoutPromise]);
-      console.log('✅ Servicio de email configurado correctamente');
+      console.log('✅ Servicio de email configurado correctamente (puerto 465)');
     } catch (error) {
       console.error('❌ Error verificando conexión de email:', error.message);
+      console.error('📋 Detalles del error:', {
+        code: error.code,
+        command: error.command,
+        response: error.response,
+        responseCode: error.responseCode
+      });
+      
       if (error.code === 'EAUTH') {
         console.error('❌ Error de autenticación - Verifica EMAIL_USER y EMAIL_PASSWORD');
       } else if (error.code === 'ETIMEDOUT' || error.message.includes('Timeout')) {
-        console.error('⚠️ Timeout conectando a Gmail SMTP. Esto puede ser normal en algunos hosts.');
+        console.error('⚠️ Timeout conectando a Gmail SMTP en puerto 465.');
         console.error('⚠️ Los emails se intentarán enviar de todas formas cuando se requieran.');
+        console.error('💡 Si el problema persiste, Render podría estar bloqueando conexiones SMTP salientes.');
+      } else if (error.code === 'ECONNREFUSED') {
+        console.error('❌ Conexión rechazada - El puerto 465 podría estar bloqueado en Render.');
+        console.error('💡 Considera verificar la configuración de red de Render.');
       }
     }
   }
@@ -360,6 +381,7 @@ class NotificationService {
       };
   
       console.log('📧 Enviando email de cancelación...');
+      console.log('📧 Email destinatario:', reservation.guestEmail);
       
       // Verificar que el transporter esté configurado
       if (!this.emailTransporter) {
@@ -370,7 +392,7 @@ class NotificationService {
       // Intentar enviar con timeout aumentado para Render
       const sendPromise = this.emailTransporter.sendMail(mailOptions);
       const sendTimeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout: Envío de email tardó más de 45 segundos')), 45000)
+        setTimeout(() => reject(new Error('Timeout: Envío de email tardó más de 60 segundos')), 60000)
       );
       
       const info = await Promise.race([sendPromise, sendTimeout]);
@@ -378,10 +400,22 @@ class NotificationService {
       return true;
     } catch (error) {
       console.error('❌ Error enviando email de cancelación:', error.message);
+      console.error('📋 Detalles del error:', {
+        code: error.code,
+        command: error.command,
+        response: error.response,
+        responseCode: error.responseCode,
+        stack: error.stack
+      });
+      
       if (error.code === 'EAUTH') {
         console.error('❌ Error de autenticación Gmail - Verifica que EMAIL_PASSWORD sea una contraseña de aplicación válida');
-      } else if (error.code === 'ECONNECTION') {
-        console.error('❌ Error de conexión - Verifica tu conexión a internet');
+      } else if (error.code === 'ECONNECTION' || error.code === 'ETIMEDOUT') {
+        console.error('❌ Error de conexión - Render podría estar bloqueando conexiones SMTP salientes');
+        console.error('💡 Posibles soluciones:');
+        console.error('   1. Verifica que Render permita conexiones salientes al puerto 465');
+        console.error('   2. Considera usar un servicio de email como SendGrid, Mailgun o Resend');
+        console.error('   3. Verifica que las variables EMAIL_USER y EMAIL_PASSWORD estén correctas en Render');
       }
       console.error('❌ Error completo:', error);
       return false;
