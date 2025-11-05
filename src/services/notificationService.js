@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const axios = require('axios');
 const smsService = require('./smsService');
 const pdfService = require('./pdfService');
 
@@ -12,9 +13,17 @@ class NotificationService {
   initEmailService() {
     const emailUser = process.env.EMAIL_USER;
     const emailPassword = process.env.EMAIL_PASSWORD;
+    const brevoApiKey = process.env.BREVO_API_KEY;
     
-    if (!emailUser || !emailPassword) {
+    // Detectar qué método de email se usará
+    if (brevoApiKey) {
+      console.log('✅ Brevo API configurado - se usará para envío de emails (recomendado para Render)');
+    } else if (emailUser && emailPassword) {
+      console.log('✅ Gmail SMTP configurado - se usará para envío de emails');
+      console.warn('⚠️ Nota: SMTP puede tener problemas en Render. Considera usar Brevo API.');
+    } else {
       console.warn('⚠️ EMAIL_USER o EMAIL_PASSWORD no están configurados en las variables de entorno');
+      console.warn('⚠️ BREVO_API_KEY tampoco está configurado');
       console.warn('⚠️ Los emails no se podrán enviar hasta que se configuren estas variables');
     }
     
@@ -118,13 +127,112 @@ class NotificationService {
     }
   }
 
-  // Método helper para enviar email con fallback automático
+  // Método para enviar email usando Brevo API (HTTP - funciona en Render)
+  async sendMailWithBrevo(mailOptions) {
+    const brevoApiKey = process.env.BREVO_API_KEY;
+    
+    if (!brevoApiKey) {
+      throw new Error('BREVO_API_KEY no configurado');
+    }
+
+    try {
+      console.log('📧 Enviando email con Brevo API...');
+      
+      // Convertir HTML a texto plano básico (para el campo text)
+      const textContent = mailOptions.html
+        .replace(/<[^>]*>/g, '') // Remover HTML tags
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .substring(0, 500); // Limitar longitud
+
+      const brevoPayload = {
+        sender: {
+          name: 'Las Acacias Refugio',
+          email: process.env.EMAIL_USER || mailOptions.from || 'notificationsacaciasrefugio@gmail.com'
+        },
+        to: [
+          {
+            email: mailOptions.to,
+            name: mailOptions.to.split('@')[0] // Nombre básico del email
+          }
+        ],
+        subject: mailOptions.subject,
+        htmlContent: mailOptions.html,
+        textContent: textContent
+      };
+
+      // Agregar replyTo si existe
+      if (mailOptions.replyTo) {
+        brevoPayload.replyTo = {
+          email: mailOptions.replyTo
+        };
+      }
+
+      // Agregar attachments si existen
+      if (mailOptions.attachments && mailOptions.attachments.length > 0) {
+        brevoPayload.attachments = mailOptions.attachments.map(att => ({
+          name: att.filename || att.contentType || 'attachment',
+          content: typeof att.content === 'string' 
+            ? att.content 
+            : (att.content instanceof Buffer 
+                ? att.content.toString('base64') 
+                : Buffer.from(att.content).toString('base64'))
+        }));
+      }
+
+      const response = await axios.post(
+        'https://api.brevo.com/v3/smtp/email',
+        brevoPayload,
+        {
+          headers: {
+            'api-key': brevoApiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          timeout: 30000 // 30 segundos timeout
+        }
+      );
+
+      console.log('✅ Email enviado exitosamente con Brevo:', response.data.messageId);
+      return {
+        messageId: response.data.messageId || `brevo-${Date.now()}`,
+        accepted: [mailOptions.to],
+        rejected: []
+      };
+    } catch (error) {
+      console.error('❌ Error enviando email con Brevo:', error.response?.data || error.message);
+      if (error.response) {
+        console.error('📋 Detalles:', {
+          status: error.response.status,
+          data: error.response.data
+        });
+      }
+      throw error;
+    }
+  }
+
+  // Método helper para enviar email con fallback automático (Brevo -> SMTP 465 -> SMTP 587)
   async sendMailWithFallback(mailOptions) {
+    // 1. Intentar primero con Brevo si está configurado (mejor opción para Render)
+    if (process.env.BREVO_API_KEY) {
+      try {
+        console.log('📧 Intentando envío con Brevo API...');
+        return await this.sendMailWithBrevo(mailOptions);
+      } catch (errorBrevo) {
+        console.warn('⚠️ Falló envío con Brevo:', errorBrevo.message);
+        console.log('📧 Intentando fallback con SMTP...');
+        // Continuar con fallback SMTP
+      }
+    }
+
+    // 2. Fallback a SMTP (solo si Brevo no está configurado o falló)
     const emailUser = process.env.EMAIL_USER;
     const emailPassword = process.env.EMAIL_PASSWORD;
     
     if (!emailUser || !emailPassword) {
-      throw new Error('EMAIL_USER o EMAIL_PASSWORD no configurados');
+      throw new Error('EMAIL_USER o EMAIL_PASSWORD no configurados (y Brevo no disponible)');
     }
 
     // Intentar primero con puerto 465 (SMTPS)
@@ -155,7 +263,8 @@ class NotificationService {
         console.log('✅ Email enviado exitosamente con puerto 587 (fallback)');
         return info;
       } catch (error587) {
-        console.error('❌ Ambos puertos fallaron. Último error:', error587.message);
+        console.error('❌ Todos los métodos fallaron. Último error:', error587.message);
+        console.error('📋 Error Brevo:', process.env.BREVO_API_KEY ? 'Intentado' : 'No configurado');
         console.error('📋 Error puerto 465:', error465.code || error465.message);
         console.error('📋 Error puerto 587:', error587.code || error587.message);
         throw error587; // Lanzar el último error
