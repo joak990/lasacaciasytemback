@@ -56,6 +56,35 @@ class NotificationService {
     });
   }
   
+  // Crear transporter con configuración específica
+  createTransporter(port, secure) {
+    const emailUser = process.env.EMAIL_USER;
+    const emailPassword = process.env.EMAIL_PASSWORD;
+    
+    return nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: port,
+      secure: secure,
+      auth: {
+        user: emailUser || 'notificationsacaciasrefugio@gmail.com',
+        pass: emailPassword || 'tu_app_password'
+      },
+      connectionTimeout: 60000,
+      greetingTimeout: 30000,
+      socketTimeout: 60000,
+      pool: false,
+      maxConnections: 1,
+      maxMessages: 1,
+      requireTLS: !secure, // Solo para STARTTLS (puerto 587)
+      tls: {
+        rejectUnauthorized: false,
+        minVersion: 'TLSv1.2'
+      },
+      debug: process.env.NODE_ENV === 'development',
+      logger: process.env.NODE_ENV === 'development'
+    });
+  }
+
   // Verificar conexión del transporter con timeout
   async verifyConnection() {
     try {
@@ -85,6 +114,51 @@ class NotificationService {
       } else if (error.code === 'ECONNREFUSED') {
         console.error('❌ Conexión rechazada - El puerto 465 podría estar bloqueado en Render.');
         console.error('💡 Considera verificar la configuración de red de Render.');
+      }
+    }
+  }
+
+  // Método helper para enviar email con fallback automático
+  async sendMailWithFallback(mailOptions) {
+    const emailUser = process.env.EMAIL_USER;
+    const emailPassword = process.env.EMAIL_PASSWORD;
+    
+    if (!emailUser || !emailPassword) {
+      throw new Error('EMAIL_USER o EMAIL_PASSWORD no configurados');
+    }
+
+    // Intentar primero con puerto 465 (SMTPS)
+    try {
+      console.log('📧 Intentando envío con puerto 465 (SMTPS)...');
+      const transporter465 = this.createTransporter(465, true);
+      const sendPromise = transporter465.sendMail(mailOptions);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout en puerto 465')), 60000)
+      );
+      
+      const info = await Promise.race([sendPromise, timeoutPromise]);
+      console.log('✅ Email enviado exitosamente con puerto 465');
+      return info;
+    } catch (error465) {
+      console.warn('⚠️ Falló envío con puerto 465:', error465.message);
+      console.log('📧 Intentando fallback con puerto 587 (STARTTLS)...');
+      
+      // Fallback a puerto 587 (STARTTLS)
+      try {
+        const transporter587 = this.createTransporter(587, false);
+        const sendPromise = transporter587.sendMail(mailOptions);
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout en puerto 587')), 60000)
+        );
+        
+        const info = await Promise.race([sendPromise, timeoutPromise]);
+        console.log('✅ Email enviado exitosamente con puerto 587 (fallback)');
+        return info;
+      } catch (error587) {
+        console.error('❌ Ambos puertos fallaron. Último error:', error587.message);
+        console.error('📋 Error puerto 465:', error465.code || error465.message);
+        console.error('📋 Error puerto 587:', error587.code || error587.message);
+        throw error587; // Lanzar el último error
       }
     }
   }
@@ -156,7 +230,7 @@ class NotificationService {
       };
 
       console.log('📧 Enviando email...');
-      const info = await this.emailTransporter.sendMail(mailOptions);
+      const info = await this.sendMailWithFallback(mailOptions);
       console.log('✅ Email enviado:', info.messageId);
       return true;
     } catch (error) {
@@ -313,19 +387,8 @@ class NotificationService {
 
       console.log('📧 Enviando email de confirmación...');
       
-      // Verificar que el transporter esté configurado
-      if (!this.emailTransporter) {
-        console.error('❌ Email transporter no está inicializado');
-        return false;
-      }
-      
-      // Intentar enviar con timeout aumentado para Render
-      const sendPromise = this.emailTransporter.sendMail(mailOptions);
-      const sendTimeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout: Envío de email tardó más de 45 segundos')), 45000)
-      );
-      
-      const info = await Promise.race([sendPromise, sendTimeout]);
+      // Usar método con fallback automático (puerto 465 -> 587)
+      const info = await this.sendMailWithFallback(mailOptions);
       console.log('✅ Email de confirmación enviado:', info.messageId);
       return true;
     } catch (error) {
@@ -383,19 +446,8 @@ class NotificationService {
       console.log('📧 Enviando email de cancelación...');
       console.log('📧 Email destinatario:', reservation.guestEmail);
       
-      // Verificar que el transporter esté configurado
-      if (!this.emailTransporter) {
-        console.error('❌ Email transporter no está inicializado');
-        return false;
-      }
-      
-      // Intentar enviar con timeout aumentado para Render
-      const sendPromise = this.emailTransporter.sendMail(mailOptions);
-      const sendTimeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout: Envío de email tardó más de 60 segundos')), 60000)
-      );
-      
-      const info = await Promise.race([sendPromise, sendTimeout]);
+      // Usar método con fallback automático (puerto 465 -> 587)
+      const info = await this.sendMailWithFallback(mailOptions);
       console.log('✅ Email de cancelación enviado:', info.messageId);
       return true;
     } catch (error) {
@@ -489,7 +541,7 @@ class NotificationService {
         `
       };
   
-      const info = await this.emailTransporter.sendMail(mailOptions);
+      const info = await this.sendMailWithFallback(mailOptions);
       console.log('✅ Email de pre-reserva enviado:', info.messageId);
       return true;
     } catch (error) {
