@@ -247,7 +247,7 @@ router.post('/', [
   body('guestName').notEmpty().trim().withMessage('Nombre del huésped es requerido'),
   body('guestLastName').notEmpty().trim().withMessage('Apellido del huésped es requerido'),
   body('guestPhone').notEmpty().trim().withMessage('Teléfono del huésped es requerido'),
-  body('guestEmail').optional().isEmail().withMessage('Email debe ser válido'),
+  body('guestEmail').notEmpty().isEmail().withMessage('Email del huésped es requerido y debe ser válido'),
   body('amountPaid').optional().isFloat({ min: 0 }).withMessage('Monto pagado debe ser un número válido'),
   body('paymentMethod').optional().isIn(['CASH', 'CARD', 'TRANSFER', 'DEPOSIT', 'OTHER']).withMessage('Método de pago inválido'),
   handleValidationErrors
@@ -488,7 +488,7 @@ router.post('/platform', [
   body('guestName').notEmpty().trim().withMessage('Nombre del huésped es requerido'),
   body('guestLastName').notEmpty().trim().withMessage('Apellido del huésped es requerido'),
   body('guestPhone').notEmpty().trim().withMessage('Teléfono del huésped es requerido'),
-  body('guestEmail').optional().isEmail().withMessage('Email debe ser válido'),
+  body('guestEmail').notEmpty().isEmail().withMessage('Email del huésped es requerido y debe ser válido'),
   handleValidationErrors
 ], async (req, res) => {
   try {
