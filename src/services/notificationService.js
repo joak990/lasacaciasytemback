@@ -2,6 +2,8 @@ const nodemailer = require('nodemailer');
 const axios = require('axios');
 const smsService = require('./smsService');
 const pdfService = require('./pdfService');
+const prisma = require('../utils/prisma');
+const crypto = require('crypto');
 
 class NotificationService {
   constructor() {
@@ -583,10 +585,94 @@ class NotificationService {
     }
   }
 
-  // Enviar email de pre-reserva al huésped
+  // Generar link temporal de pre-checkin
+  async generatePreCheckInLink(reservationId) {
+    try {
+      // Verificar si ya existe un link válido
+      const existingLink = await prisma.preCheckInLink.findUnique({
+        where: { reservationId },
+      });
+
+      if (existingLink) {
+        const now = new Date();
+        if (existingLink.expiresAt > now && !existingLink.isUsed) {
+          // Link válido existente
+          const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+          return `${baseUrl}/precheckin/${existingLink.token}`;
+        }
+      }
+
+      // Generar nuevo token único
+      const token = crypto.randomBytes(32).toString('hex');
+      
+      // Link expira en 7 días
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+      
+      // Crear o actualizar el link
+      const preCheckInLink = await prisma.preCheckInLink.upsert({
+        where: { reservationId },
+        update: {
+          token,
+          expiresAt,
+          isUsed: false,
+          usedAt: null
+        },
+        create: {
+          reservationId,
+          token,
+          expiresAt
+        }
+      });
+      
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+      return `${baseUrl}/precheckin/${preCheckInLink.token}`;
+    } catch (error) {
+      console.error('❌ Error generando link de pre-checkin:', error);
+      return null;
+    }
+  }
+
   async sendGuestConfirmationEmail(reservation, cabin) {
     try {
       console.log('📧 Enviando email de pre-reserva al huésped...');
+      
+      // Generar link de pre-checkin
+      let preCheckInLink = null;
+      if (reservation.guestCount > 1) {
+        console.log('🔗 Generando link de pre-checkin...');
+        preCheckInLink = await this.generatePreCheckInLink(reservation.id);
+        if (preCheckInLink) {
+          console.log('✅ Link de pre-checkin generado:', preCheckInLink);
+        } else {
+          console.warn('⚠️ No se pudo generar el link de pre-checkin');
+        }
+      }
+      
+      // Construir sección del link de pre-checkin si existe
+      let preCheckInSection = '';
+      if (preCheckInLink && reservation.guestCount > 1) {
+        preCheckInSection = `
+              <!-- SECCIÓN DE PRE-CHECKIN -->
+              <div style="background-color: #dbeafe; border: 3px solid #3b82f6; padding: 25px; border-radius: 10px; margin-bottom: 30px; text-align: center;">
+                <div style="display: inline-flex; align-items: center; justify-content: center; background-color: #3b82f6; color: white; border-radius: 50%; width: 60px; height: 60px; margin-bottom: 15px;">
+                  <span style="font-size: 30px;">📝</span>
+                </div>
+                <h3 style="color: #1e40af; margin: 0 0 15px 0; font-size: 20px; font-weight: bold;">Completá los datos de tus huéspedes</h3>
+                <p style="color: #1e3a8a; margin: 0 0 20px 0; font-size: 16px; line-height: 1.5;">
+                  Para agilizar tu check-in, completá los datos de todos los huéspedes que viajarán contigo. 
+                  Solo necesitás el nombre, apellido, DNI y fecha de nacimiento de cada persona.
+                </p>
+                <a href="${preCheckInLink}" 
+                   style="display: inline-block; background-color: #3b82f6; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin-top: 10px;">
+                  Completar datos de huéspedes →
+                </a>
+                <p style="color: #64748b; margin: 15px 0 0 0; font-size: 12px; font-style: italic;">
+                  Este link es temporal y expira en 7 días
+                </p>
+              </div>
+        `;
+      }
       
       const mailOptions = {
         from: process.env.EMAIL_USER || 'lasacaciasrefugio@gmail.com',
@@ -624,6 +710,8 @@ class NotificationService {
                 <p><strong>Huéspedes:</strong> ${reservation.guestCount} personas</p>
                 <p><strong>Total a pagar:</strong> $${reservation.totalPrice}</p>
               </div>
+              
+              ${preCheckInSection}
               
               <div style="background-color: #fef3c7; border: 2px solid #f59e0b; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
                 <h3 style="color: #92400e; margin: 0 0 20px 0; font-size: 20px;">💳 Datos para Transferencia Bancaria</h3>

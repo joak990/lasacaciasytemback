@@ -35,6 +35,8 @@ model Payment {
 model Reservation {
   id                  String               @id @default(uuid())
   guestName           String
+  guestLastName       String
+  guestDNI            String?              // DNI del titular
   checkIn             DateTime
   checkOut            DateTime
   totalPrice          Float
@@ -44,7 +46,6 @@ model Reservation {
   amountPaid          Float                @default(0)
   guestCount          Int
   guestEmail          String?
-  guestLastName       String
   guestPhone          String
   paymentMethod       PaymentMethod?
   paymentNotes        String?
@@ -55,10 +56,13 @@ model Reservation {
   checkInDone         Boolean              @default(false)
   checkOutDone        Boolean              @default(false)
   channel             String?              @default("CALENDAR")
+  preCheckInCompleted Boolean              @default(false) // Si completó el formulario de pre-checkin
   payments            Payment[]
   cabin               Cabin                @relation(fields: [cabinId], references: [id])
   user                User?                @relation(fields: [userId], references: [id])
   reservationServices ReservationService[]
+  guests               Guest[]             // Huéspedes adicionales
+  preCheckInLink      PreCheckInLink?      // Link temporal de pre-checkin
 }
 
 model Service {
@@ -172,4 +176,35 @@ enum CabinPriceType {
   HOLIDAY     // Precio por feriados
   WEEKEND     // Precio de fin de semana
   CUSTOM      // Precio personalizado
+}
+
+// Modelo para huéspedes adicionales de una reserva
+model Guest {
+  id            String      @id @default(uuid())
+  reservationId String
+  name          String      // Nombre del huésped
+  lastName      String      // Apellido del huésped
+  dni           String      // DNI del huésped
+  dateOfBirth   DateTime    // Fecha de nacimiento
+  isMainGuest   Boolean     @default(false) // Si es el titular (ya está en Reservation)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @default(now()) @updatedAt
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  
+  @@index([reservationId])
+}
+
+// Modelo para links temporales de pre-checkin
+model PreCheckInLink {
+  id            String      @id @default(uuid())
+  reservationId String      @unique
+  token         String      @unique // Token único para el link
+  expiresAt     DateTime    // Fecha de expiración del link
+  isUsed        Boolean     @default(false) // Si ya fue usado
+  usedAt        DateTime?   // Cuándo fue usado
+  createdAt     DateTime    @default(now())
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  
+  @@index([token])
+  @@index([expiresAt])
 }

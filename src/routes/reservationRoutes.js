@@ -191,6 +191,215 @@ router.get('/', async (req, res) => {
   }
 });
 
+// ============================================
+// ENDPOINTS PÚBLICOS DE PRE-CHECKIN (deben ir antes de /:id)
+// ============================================
+
+// GET /api/reservations/precheckin/:token - Obtener datos de reserva con token (público)
+router.get('/precheckin/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    console.log('🔍 Buscando link de pre-checkin con token:', token);
+    
+    // Primero buscar el link sin includes para verificar que existe
+    let preCheckInLink = await prisma.preCheckInLink.findUnique({
+      where: { token },
+    });
+    
+    console.log('🔍 Resultado búsqueda inicial:', preCheckInLink ? 'Encontrado' : 'No encontrado');
+    
+    if (!preCheckInLink) {
+      console.log('❌ Link no encontrado en la base de datos para token:', token.substring(0, 20) + '...');
+      return res.status(404).json({ error: 'Link no encontrado o inválido' });
+    }
+    
+    // Ahora obtener con todos los includes
+    preCheckInLink = await prisma.preCheckInLink.findUnique({
+      where: { token },
+      include: {
+        reservation: {
+          include: {
+            cabin: {
+              select: {
+                id: true,
+                name: true,
+                capacity: true
+              }
+            },
+            guests: true
+          }
+        }
+      }
+    });
+    
+    console.log('🔍 Resultado de búsqueda:', preCheckInLink ? 'Encontrado' : 'No encontrado');
+    
+    if (!preCheckInLink) {
+      console.log('❌ Link no encontrado en la base de datos');
+      return res.status(404).json({ error: 'Link no encontrado o inválido' });
+    }
+    
+    console.log('🔍 Link encontrado:', {
+      id: preCheckInLink.id,
+      reservationId: preCheckInLink.reservationId,
+      expiresAt: preCheckInLink.expiresAt,
+      isUsed: preCheckInLink.isUsed,
+      preCheckInCompleted: preCheckInLink.reservation.preCheckInCompleted
+    });
+    
+    // Verificar si está expirado
+    const now = new Date();
+    console.log('🔍 Verificando expiración:', {
+      expiresAt: preCheckInLink.expiresAt,
+      now: now,
+      expired: preCheckInLink.expiresAt < now
+    });
+    if (preCheckInLink.expiresAt < now) {
+      console.log('❌ Link expirado');
+      return res.status(400).json({ error: 'El link ha expirado' });
+    }
+    
+    // Verificar si ya fue usado
+    console.log('🔍 Verificando si fue usado:', preCheckInLink.isUsed);
+    if (preCheckInLink.isUsed) {
+      console.log('❌ Link ya fue utilizado');
+      return res.status(400).json({ error: 'Este link ya fue utilizado' });
+    }
+    
+    // Verificar si ya completó el pre-checkin
+    console.log('🔍 Verificando si completó pre-checkin:', preCheckInLink.reservation.preCheckInCompleted);
+    if (preCheckInLink.reservation.preCheckInCompleted) {
+      console.log('❌ Pre-checkin ya completado');
+      return res.status(400).json({ 
+        error: 'El formulario de pre-checkin ya fue completado',
+        completed: true
+      });
+    }
+    
+    console.log('✅ Link válido, devolviendo datos');
+    
+    res.json({
+      reservation: {
+        id: preCheckInLink.reservation.id,
+        guestName: preCheckInLink.reservation.guestName,
+        guestLastName: preCheckInLink.reservation.guestLastName,
+        checkIn: preCheckInLink.reservation.checkIn,
+        checkOut: preCheckInLink.reservation.checkOut,
+        guestCount: preCheckInLink.reservation.guestCount,
+        cabin: preCheckInLink.reservation.cabin,
+        guests: preCheckInLink.reservation.guests || []
+      },
+      expiresAt: preCheckInLink.expiresAt
+    });
+    
+  } catch (error) {
+    console.error('❌ Error obteniendo datos de pre-checkin:', error);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Error completo:', JSON.stringify(error, null, 2));
+    res.status(500).json({ 
+      error: 'Error al obtener datos de pre-checkin',
+      details: error.message 
+    });
+  }
+});
+
+// POST /api/reservations/precheckin/:token - Enviar datos de huéspedes (público)
+router.post('/precheckin/:token', [
+  body('guests').isArray({ min: 1 }).withMessage('Debe haber al menos un huésped'),
+  body('guests.*.name').notEmpty().trim().withMessage('Nombre del huésped es requerido'),
+  body('guests.*.lastName').notEmpty().trim().withMessage('Apellido del huésped es requerido'),
+  body('guests.*.dni').notEmpty().trim().withMessage('DNI del huésped es requerido'),
+  body('guests.*.dateOfBirth').isISO8601().withMessage('Fecha de nacimiento debe ser válida'),
+  handleValidationErrors
+], async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { guests } = req.body;
+    
+    const preCheckInLink = await prisma.preCheckInLink.findUnique({
+      where: { token },
+      include: {
+        reservation: {
+          include: {
+            cabin: true,
+            guests: true
+          }
+        }
+      }
+    });
+    
+    if (!preCheckInLink) {
+      return res.status(404).json({ error: 'Link no encontrado o inválido' });
+    }
+    
+    // Verificar si está expirado
+    const now = new Date();
+    if (preCheckInLink.expiresAt < now) {
+      return res.status(400).json({ error: 'El link ha expirado' });
+    }
+    
+    // Verificar si ya fue usado
+    if (preCheckInLink.isUsed) {
+      return res.status(400).json({ error: 'Este link ya fue utilizado' });
+    }
+    
+    // Verificar si ya completó el pre-checkin
+    if (preCheckInLink.reservation.preCheckInCompleted) {
+      return res.status(400).json({ error: 'El formulario de pre-checkin ya fue completado' });
+    }
+    
+    // Validar cantidad de huéspedes
+    if (guests.length !== preCheckInLink.reservation.guestCount) {
+      return res.status(400).json({ 
+        error: `Debe proporcionar información para ${preCheckInLink.reservation.guestCount} huésped(es)` 
+      });
+    }
+    
+    // Crear huéspedes en la base de datos
+    const createdGuests = await Promise.all(
+      guests.map((guest, index) => 
+        prisma.guest.create({
+          data: {
+            reservationId: preCheckInLink.reservation.id,
+            name: guest.name,
+            lastName: guest.lastName,
+            dni: guest.dni,
+            dateOfBirth: new Date(guest.dateOfBirth),
+            isMainGuest: index === 0 // Marcar el primer huésped como principal
+          }
+        })
+      )
+    );
+    
+    // Marcar link como usado y reserva como completada
+    await prisma.$transaction([
+      prisma.preCheckInLink.update({
+        where: { id: preCheckInLink.id },
+        data: {
+          isUsed: true,
+          usedAt: now
+        }
+      }),
+      prisma.reservation.update({
+        where: { id: preCheckInLink.reservation.id },
+        data: {
+          preCheckInCompleted: true
+        }
+      })
+    ]);
+    
+    res.json({
+      success: true,
+      message: 'Datos de huéspedes guardados exitosamente',
+      guests: createdGuests
+    });
+    
+  } catch (error) {
+    console.error('Error guardando datos de pre-checkin:', error);
+    res.status(500).json({ error: 'Error al guardar datos de pre-checkin' });
+  }
+});
+
 // GET /api/reservations/:id - Obtener reservación por ID
 router.get('/:id', async (req, res) => {
   try {
@@ -200,6 +409,7 @@ router.get('/:id', async (req, res) => {
       where: { id },
       include: {
         payments: true,
+        guests: true, // Incluir huéspedes
         cabin: {
           select: {
             id: true,
@@ -246,6 +456,7 @@ router.post('/', [
   body('guestCount').isInt({ min: 1 }).withMessage('Número de huéspedes debe ser un entero válido'),
   body('guestName').notEmpty().trim().withMessage('Nombre del huésped es requerido'),
   body('guestLastName').notEmpty().trim().withMessage('Apellido del huésped es requerido'),
+  body('guestDNI').optional({ nullable: true }).trim(),
   body('guestPhone').notEmpty().trim().withMessage('Teléfono del huésped es requerido'),
   body('guestEmail').notEmpty().isEmail().withMessage('Email del huésped es requerido y debe ser válido'),
   body('amountPaid').optional().isFloat({ min: 0 }).withMessage('Monto pagado debe ser un número válido'),
@@ -263,6 +474,7 @@ router.post('/', [
       guestCount,
       guestName,
       guestLastName,
+      guestDNI,
       guestPhone,
       guestEmail,
       amountPaid = 0,
@@ -435,6 +647,7 @@ router.post('/', [
         guestCount: guestCount,
         guestName,
         guestLastName,
+        guestDNI: guestDNI || null,
         guestEmail: guestEmail || '',
         guestPhone,
         paymentStatus: 'PENDING',
@@ -487,6 +700,7 @@ router.post('/platform', [
   body('guestCount').isInt({ min: 1 }).withMessage('Número de huéspedes debe ser un entero válido'),
   body('guestName').notEmpty().trim().withMessage('Nombre del huésped es requerido'),
   body('guestLastName').notEmpty().trim().withMessage('Apellido del huésped es requerido'),
+  body('guestDNI').optional({ nullable: true }).trim(),
   body('guestPhone').notEmpty().trim().withMessage('Teléfono del huésped es requerido'),
   body('guestEmail').notEmpty().isEmail().withMessage('Email del huésped es requerido y debe ser válido'),
   handleValidationErrors
@@ -504,6 +718,7 @@ router.post('/platform', [
       guestCount,
       guestName,
       guestLastName,
+      guestDNI,
       guestPhone,
       guestEmail
     } = req.body;
@@ -602,6 +817,7 @@ router.post('/platform', [
         guestCount: guestCount,
         guestName,
         guestLastName,
+        guestDNI: guestDNI || null,
         guestEmail: guestEmail || '',
         guestPhone,
         paymentStatus: 'PENDING',
@@ -1127,4 +1343,104 @@ router.post('/:id/send-cancellation', async (req, res) => {
 });
 
 // ... existing code ...
+// ============================================
+// ENDPOINTS DE PRE-CHECKIN
+// ============================================
+
+// POST /api/reservations/:id/generate-precheckin-link - Generar link temporal de pre-checkin
+router.post('/:id/generate-precheckin-link', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🔗 Generando link de pre-checkin para reservación:', id);
+    
+    const reservation = await prisma.reservation.findUnique({
+      where: { id },
+      include: {
+        cabin: true,
+        preCheckInLink: true
+      }
+    });
+    
+    if (!reservation) {
+      console.log('❌ Reservación no encontrada:', id);
+      return res.status(404).json({ error: 'Reservación no encontrada' });
+    }
+    
+    console.log('✅ Reservación encontrada, preCheckInLink existente:', !!reservation.preCheckInLink);
+    
+    // Si ya existe un link, verificar si está expirado
+    if (reservation.preCheckInLink) {
+      const now = new Date();
+      console.log('🔍 Verificando link existente:', {
+        expiresAt: reservation.preCheckInLink.expiresAt,
+        now: now,
+        isUsed: reservation.preCheckInLink.isUsed,
+        token: reservation.preCheckInLink.token.substring(0, 20) + '...'
+      });
+      if (reservation.preCheckInLink.expiresAt > now && !reservation.preCheckInLink.isUsed) {
+        // Link válido existente
+        const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+        console.log('✅ Link existente válido, devolviendo:', `${baseUrl}/precheckin/${reservation.preCheckInLink.token.substring(0, 20)}...`);
+        return res.json({
+          link: `${baseUrl}/precheckin/${reservation.preCheckInLink.token}`,
+          expiresAt: reservation.preCheckInLink.expiresAt,
+          token: reservation.preCheckInLink.token
+        });
+      }
+      console.log('⚠️ Link existente expirado o usado, generando nuevo');
+    }
+    
+    // Generar nuevo token único
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    console.log('🔑 Token generado:', token.substring(0, 20) + '...');
+    
+    // Link expira en 7 días
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    console.log('📅 Link expira en:', expiresAt);
+    
+    // Crear o actualizar el link
+    console.log('💾 Guardando link en base de datos...');
+    const preCheckInLink = await prisma.preCheckInLink.upsert({
+      where: { reservationId: id },
+      update: {
+        token,
+        expiresAt,
+        isUsed: false,
+        usedAt: null
+      },
+      create: {
+        reservationId: id,
+        token,
+        expiresAt
+      }
+    });
+    
+    console.log('✅ Link guardado exitosamente:', {
+      id: preCheckInLink.id,
+      token: preCheckInLink.token.substring(0, 20) + '...',
+      expiresAt: preCheckInLink.expiresAt
+    });
+    
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
+    const finalLink = `${baseUrl}/precheckin/${preCheckInLink.token}`;
+    console.log('🔗 Link final generado:', finalLink);
+    
+    res.json({
+      link: finalLink,
+      expiresAt: preCheckInLink.expiresAt,
+      token: preCheckInLink.token
+    });
+    
+  } catch (error) {
+    console.error('Error generando link de pre-checkin:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ 
+      error: 'Error al generar link de pre-checkin',
+      details: error.message 
+    });
+  }
+});
+
 module.exports = router;
