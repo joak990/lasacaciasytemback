@@ -18,6 +18,8 @@ app.use(cors({
     'http://127.0.0.1:3001',
     'https://lasacaciasistemafront.vercel.app',
     'https://lasacaciasistemafront.vercel.app/',
+    'https://lasacaciasrefugio.com',
+    'https://www.lasacaciasrefugio.com',
     'https://*.vercel.app',
     'https://vercel.app'
   ],
