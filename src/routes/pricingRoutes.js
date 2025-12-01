@@ -271,14 +271,16 @@ router.get('/calculate', async (req, res) => {
       return res.status(400).json({ error: 'Parámetros requeridos: cabinId, checkIn, checkOut' });
     }
 
-    const price = await calculateCabinPrice(cabinId, new Date(checkIn), new Date(checkOut));
+    const { totalPrice, specialPrice } = await calculateCabinPriceWithSpecial(cabinId, new Date(checkIn), new Date(checkOut));
+    const nights = Math.ceil((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24));
     
     res.json({ 
       cabinId,
       checkIn,
       checkOut,
-      totalPrice: price,
-      pricePerNight: price / Math.ceil((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24))
+      totalPrice: totalPrice,
+      pricePerNight: specialPrice || totalPrice / nights,
+      specialPrice: specialPrice
     });
   } catch (error) {
     console.error('Error calculando precio:', error);
@@ -286,22 +288,16 @@ router.get('/calculate', async (req, res) => {
   }
 });
 
-// Función auxiliar para calcular precio
-async function calculateCabinPrice(cabinId, checkIn, checkOut) {
+// Función auxiliar para calcular precio con precio especial
+async function calculateCabinPriceWithSpecial(cabinId, checkIn, checkOut) {
+  console.log('🔍 calculateCabinPriceWithSpecial - Parámetros:', { cabinId, checkIn, checkOut });
+  
   const cabin = await prisma.cabin.findUnique({
     where: { id: cabinId },
     include: {
       pricing: {
         where: {
-          isActive: true,
-          OR: [
-            {
-              AND: [
-                { startDate: { lte: checkOut } },
-                { endDate: { gte: checkIn } }
-              ]
-            }
-          ]
+          isActive: true
         },
         orderBy: { priority: 'desc' }
       }
@@ -310,11 +306,87 @@ async function calculateCabinPrice(cabinId, checkIn, checkOut) {
 
   if (!cabin) throw new Error('Cabaña no encontrada');
 
+  console.log('🔍 Cabaña encontrada:', { id: cabin.id, name: cabin.name, basePrice: cabin.price });
+  console.log('🔍 Precios especiales disponibles:', cabin.pricing.length);
+
   let totalPrice = 0;
+  let specialPrice = null;
   const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+  
+  console.log('🔍 Noches a calcular:', nights);
   
   // Si no hay precios específicos, usar precio base
   if (cabin.pricing.length === 0) {
+    console.log('⚠️ No hay precios especiales, usando precio base');
+    return { totalPrice: cabin.price * nights, specialPrice: null };
+  }
+
+  // Calcular precio día por día
+  for (let i = 0; i < nights; i++) {
+    const currentDate = new Date(checkIn);
+    currentDate.setDate(currentDate.getDate() + i);
+    currentDate.setHours(0, 0, 0, 0); // Normalizar a medianoche
+    
+    console.log(`🔍 Día ${i + 1}: ${currentDate.toISOString().split('T')[0]}`);
+    
+    // Buscar precio específico para esta fecha
+    const specificPricing = cabin.pricing.find(p => {
+      const pStartDate = new Date(p.startDate);
+      const pEndDate = new Date(p.endDate);
+      pStartDate.setHours(0, 0, 0, 0);
+      pEndDate.setHours(0, 0, 0, 0);
+      
+      const matches = currentDate >= pStartDate && currentDate <= pEndDate;
+      if (matches) {
+        console.log(`  ✅ Coincide con precio especial: $${p.price} (${p.priceType})`);
+      }
+      return matches;
+    });
+    
+    const dayPrice = specificPricing ? specificPricing.price : cabin.price;
+    console.log(`  💰 Precio del día: $${dayPrice}`);
+    
+    // Guardar el precio especial (si existe)
+    if (specificPricing && !specialPrice) {
+      specialPrice = specificPricing.price;
+      console.log(`  🔍 Guardando specialPrice: $${specialPrice}`);
+    }
+    totalPrice += dayPrice;
+  }
+
+  console.log('✅ Resultado final:', { totalPrice, specialPrice });
+  return { totalPrice, specialPrice };
+}
+
+// Función auxiliar para calcular precio
+async function calculateCabinPrice(cabinId, checkIn, checkOut) {
+  console.log('🔍 calculateCabinPrice - Parámetros:', { cabinId, checkIn, checkOut });
+  
+  const cabin = await prisma.cabin.findUnique({
+    where: { id: cabinId },
+    include: {
+      pricing: {
+        where: {
+          isActive: true
+        },
+        orderBy: { priority: 'desc' }
+      }
+    }
+  });
+
+  if (!cabin) throw new Error('Cabaña no encontrada');
+
+  console.log('🔍 Cabaña encontrada:', { id: cabin.id, name: cabin.name, basePrice: cabin.price });
+  console.log('🔍 Precios especiales disponibles:', cabin.pricing.length);
+
+  let totalPrice = 0;
+  const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+  
+  console.log('🔍 Noches a calcular:', nights);
+  
+  // Si no hay precios específicos, usar precio base
+  if (cabin.pricing.length === 0) {
+    console.log('⚠️ No hay precios especiales, usando precio base');
     return cabin.price * nights;
   }
 
@@ -322,15 +394,30 @@ async function calculateCabinPrice(cabinId, checkIn, checkOut) {
   for (let i = 0; i < nights; i++) {
     const currentDate = new Date(checkIn);
     currentDate.setDate(currentDate.getDate() + i);
+    currentDate.setHours(0, 0, 0, 0); // Normalizar a medianoche
+    
+    console.log(`🔍 Día ${i + 1}: ${currentDate.toISOString().split('T')[0]}`);
     
     // Buscar precio específico para esta fecha
-    const specificPricing = cabin.pricing.find(p => 
-      currentDate >= p.startDate && currentDate <= p.endDate
-    );
+    const specificPricing = cabin.pricing.find(p => {
+      const pStartDate = new Date(p.startDate);
+      const pEndDate = new Date(p.endDate);
+      pStartDate.setHours(0, 0, 0, 0);
+      pEndDate.setHours(0, 0, 0, 0);
+      
+      const matches = currentDate >= pStartDate && currentDate <= pEndDate;
+      if (matches) {
+        console.log(`  ✅ Coincide con precio especial: $${p.price} (${p.priceType})`);
+      }
+      return matches;
+    });
     
-    totalPrice += specificPricing ? specificPricing.price : cabin.price;
+    const dayPrice = specificPricing ? specificPricing.price : cabin.price;
+    console.log(`  💰 Precio del día: $${dayPrice}`);
+    totalPrice += dayPrice;
   }
 
+  console.log('✅ Precio total calculado:', totalPrice);
   return totalPrice;
 }
 
