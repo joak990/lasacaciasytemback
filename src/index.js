@@ -58,6 +58,7 @@ const serviceRoutes = require('./routes/serviceRoutes');
 const reservationRoutes = require('./routes/reservationRoutes');
 const pricingRoutes = require('./routes/pricingRoutes');
 const botRoutes = require('./routes/botRoutes');
+const testEmailRoutes = require('./routes/testEmailRoutes');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -66,6 +67,7 @@ app.use('/api/services', serviceRoutes);
 app.use('/api/reservations', reservationRoutes);
 app.use('/api/pricing', pricingRoutes);
 app.use('/api/bot', botRoutes);
+app.use('/api/test-emails', testEmailRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

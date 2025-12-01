@@ -677,10 +677,10 @@ class NotificationService {
               <!-- MARCO ROJO CON RECORDATORIO -->
               <div style="background-color: #fef2f2; border: 3px solid #dc2626; padding: 20px; border-radius: 10px; margin-bottom: 30px; text-align: center;">
                 <div style="display: inline-flex; align-items: center; justify-content: center; background-color: #dc2626; color: white; border-radius: 50%; width: 50px; height: 50px; margin-bottom: 15px;">
-                  <span style="font-size: 24px;">⚠️</span>
+                  <span style="font-size: 24px;">⏰</span>
                 </div>
                 <h3 style="color: #dc2626; margin: 0 0 10px 0; font-size: 18px; font-weight: bold;">¡IMPORTANTE!</h3>
-                <p style="color: #dc2626; margin: 0; font-size: 16px; font-weight: bold; line-height: 1.4;">Recordá que tenés 24 hs para enviar el monto de reservación y enviarnos el comprobante para confirmar su estadía!</p>
+                <p style="color: #dc2626; margin: 0; font-size: 16px; font-weight: bold; line-height: 1.4;">Recordá que tenés <strong>1 HORA</strong> para enviar el monto del 50% de reservación y enviarnos el comprobante para confirmar su estadía!</p>
               </div>
               
               <div style="background-color: #f8f9fa; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
@@ -767,6 +767,216 @@ class NotificationService {
       sms: smsSent,
       guestEmail: guestEmailSent
     };
+  }
+
+  // Enviar email al admin notificando reserva próxima a vencer (45 minutos)
+  async sendAdminReminderEmail(reservation, cabin) {
+    try {
+      console.log('📧 Enviando email de recordatorio al admin...');
+      
+      const mailOptions = {
+        from: process.env.EMAIL_USER || 'lasacaciasrefugio@gmail.com',
+        to: process.env.ADMIN_EMAIL || 'lasacaciasrefugio@gmail.com',
+        subject: '⏰ Reserva próxima a vencer - ' + reservation.guestName + ' ' + reservation.guestLastName,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+              <h1 style="color: white; margin: 0; font-size: 28px; font-weight: bold;">⏰ Reserva Próxima a Vencer</h1>
+              <p style="color: #fef3c7; margin: 10px 0 0 0; font-size: 16px;">Esta reserva se cancelará automáticamente en 15 minutos si no se confirma</p>
+            </div>
+            <div style="background-color: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+              <div style="background-color: #fef3c7; border: 2px solid #f59e0b; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 style="color: #92400e; margin: 0 0 15px 0; font-size: 18px; font-weight: bold;">📋 Detalles de la Reserva</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Huésped:</td>
+                    <td style="padding: 8px 0; color: #6b7280;">${reservation.guestName} ${reservation.guestLastName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Cabaña:</td>
+                    <td style="padding: 8px 0; color: #6b7280;">${cabin.name}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Fechas:</td>
+                    <td style="padding: 8px 0; color: #6b7280;">${new Date(reservation.checkIn).toLocaleDateString('es-ES')} - ${new Date(reservation.checkOut).toLocaleDateString('es-ES')}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Personas:</td>
+                    <td style="padding: 8px 0; color: #6b7280;">${reservation.guestCount}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Email:</td>
+                    <td style="padding: 8px 0; color: #6b7280;">${reservation.guestEmail}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Teléfono:</td>
+                    <td style="padding: 8px 0; color: #6b7280;">${reservation.guestPhone}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Monto (50%):</td>
+                    <td style="padding: 8px 0; color: #dc2626; font-weight: bold;">$${Math.round(reservation.totalPrice * 0.5)}</td>
+                  </tr>
+                </table>
+              </div>
+              
+              <div style="background-color: #fee2e2; border: 2px solid #dc2626; padding: 20px; border-radius: 8px; text-align: center;">
+                <p style="color: #991b1b; margin: 0; font-weight: bold; font-size: 16px;">⚠️ Esta reserva se cancelará automáticamente en 15 minutos si el huésped no confirma el pago.</p>
+              </div>
+            </div>
+          </div>
+        `
+      };
+  
+      const info = await this.sendMailWithFallback(mailOptions);
+      console.log('✅ Email de recordatorio al admin enviado:', info.messageId);
+      return true;
+    } catch (error) {
+      console.error('❌ Error enviando email de recordatorio al admin:', error);
+      return false;
+    }
+  }
+
+  // Enviar email de cancelación automática al admin
+  async sendAdminCancellationEmail(reservation, cabin) {
+    try {
+      console.log('📧 Enviando email de cancelación automática al admin...');
+      
+      const mailOptions = {
+        from: process.env.EMAIL_USER || 'lasacaciasrefugio@gmail.com',
+        to: process.env.ADMIN_EMAIL || 'lasacaciasrefugio@gmail.com',
+        subject: '❌ Reserva Cancelada Automáticamente - ' + reservation.guestName + ' ' + reservation.guestLastName,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+              <h1 style="color: white; margin: 0; font-size: 28px; font-weight: bold;">❌ Reserva Cancelada</h1>
+              <p style="color: #fecaca; margin: 10px 0 0 0; font-size: 16px;">La reserva fue cancelada automáticamente por vencimiento de plazo</p>
+            </div>
+            <div style="background-color: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+              <div style="background-color: #fee2e2; border: 2px solid #dc2626; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 style="color: #991b1b; margin: 0 0 15px 0; font-size: 18px; font-weight: bold;">📋 Detalles de la Reserva Cancelada</h3>
+                <table style="width: 100%; border-collapse: collapse;">
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Huésped:</td>
+                    <td style="padding: 8px 0; color: #6b7280;">${reservation.guestName} ${reservation.guestLastName}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Cabaña:</td>
+                    <td style="padding: 8px 0; color: #6b7280;">${cabin.name}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Fechas:</td>
+                    <td style="padding: 8px 0; color: #6b7280;">${new Date(reservation.checkIn).toLocaleDateString('es-ES')} - ${new Date(reservation.checkOut).toLocaleDateString('es-ES')}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Personas:</td>
+                    <td style="padding: 8px 0; color: #6b7280;">${reservation.guestCount}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Email:</td>
+                    <td style="padding: 8px 0; color: #6b7280;">${reservation.guestEmail}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Teléfono:</td>
+                    <td style="padding: 8px 0; color: #6b7280;">${reservation.guestPhone}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-weight: bold; color: #374151;">Motivo:</td>
+                    <td style="padding: 8px 0; color: #dc2626; font-weight: bold;">No confirmó el pago en el plazo de 1 hora</td>
+                  </tr>
+                </table>
+              </div>
+              
+              <div style="background-color: #f0fdf4; border: 2px solid #22c55e; padding: 20px; border-radius: 8px; text-align: center;">
+                <p style="color: #166534; margin: 0; font-weight: bold; font-size: 16px;">✅ La cabaña ha sido liberada y está disponible nuevamente para reservas.</p>
+              </div>
+            </div>
+          </div>
+        `
+      };
+  
+      const info = await this.sendMailWithFallback(mailOptions);
+      console.log('✅ Email de cancelación automática al admin enviado:', info.messageId);
+      return true;
+    } catch (error) {
+      console.error('❌ Error enviando email de cancelación automática al admin:', error);
+      return false;
+    }
+  }
+
+  // Enviar email de recordatorio a los 40 minutos
+  async sendReminderEmail(reservation, cabin) {
+    try {
+      console.log('📧 Enviando email de recordatorio de depósito al huésped...');
+      
+      const mailOptions = {
+        from: process.env.EMAIL_USER || 'lasacaciasrefugio@gmail.com',
+        to: reservation.guestEmail,
+        subject: '⏰ ¡URGENTE! Quedan menos de 20 minutos para confirmar tu reserva - Las Acacias Refugio',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f8f9fa;">
+            <div style="background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+              <h1 style="color: white; margin: 0; font-size: 28px; font-weight: bold;">⏰ ¡URGENTE!</h1>
+              <p style="color: #fecaca; margin: 10px 0 0 0; font-size: 16px;">Quedan menos de 20 minutos para confirmar tu reserva</p>
+            </div>
+            <div style="background-color: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+              <div style="text-align: center; margin-bottom: 30px;">
+                <div style="background-color: #fee2e2; border: 2px solid #dc2626; border-radius: 50%; width: 80px; height: 80px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+                  <span style="font-size: 40px; color: #dc2626;">⏰</span>
+                </div>
+                <h2 style="color: #1f2937; margin: 0 0 10px 0; font-size: 24px;">¡Apúrate!</h2>
+                <p style="color: #6b7280; margin: 0; font-size: 16px;">¡Hola ${reservation.guestName}! Te recordamos que tu pre-reserva está a punto de vencer.</p>
+              </div>
+              
+              <!-- MARCO ROJO URGENTE -->
+              <div style="background-color: #fef2f2; border: 3px solid #dc2626; padding: 25px; border-radius: 10px; margin-bottom: 30px; text-align: center;">
+                <h3 style="color: #dc2626; margin: 0 0 15px 0; font-size: 20px; font-weight: bold;">⚠️ TIEMPO LÍMITE</h3>
+                <p style="color: #dc2626; margin: 0 0 10px 0; font-size: 18px; font-weight: bold;">Quedan menos de <strong>20 MINUTOS</strong></p>
+                <p style="color: #991b1b; margin: 0; font-size: 16px; line-height: 1.5;">
+                  Para que realices el depósito del <strong>50%</strong> y envíes el comprobante por WhatsApp.<br>
+                  <strong>¡Podrías perder tu pre-reserva si no lo haces en los siguientes minutos!</strong>
+                </p>
+              </div>
+              
+              <div style="background-color: #f8f9fa; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
+                <h3 style="color: #1f2937; margin: 0 0 20px 0; font-size: 20px;">📋 Detalles de tu Reserva</h3>
+                <p><strong>Cabaña:</strong> ${cabin.name}</p>
+                <p><strong>Fechas:</strong> ${new Date(reservation.checkIn).toLocaleDateString('es-ES')} - ${new Date(reservation.checkOut).toLocaleDateString('es-ES')}</p>
+                <p><strong>Huéspedes:</strong> ${reservation.guestCount} personas</p>
+                <p><strong>Monto a depositar (50%):</strong> <span style="color: #dc2626; font-weight: bold; font-size: 18px;">$${Math.round(reservation.totalPrice * 0.5)}</span></p>
+              </div>
+              
+              <div style="background-color: #fef3c7; border: 2px solid #f59e0b; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
+                <h3 style="color: #92400e; margin: 0 0 20px 0; font-size: 20px;">💳 Datos para Transferencia Bancaria</h3>
+                <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 15px;">
+                  <p style="margin: 5px 0;"><strong>Alias:</strong> lasacaciasrefugio</p>
+                  <p style="margin: 5px 0;"><strong>Banco:</strong> Santander</p>
+                  <p style="margin: 5px 0;"><strong>Titular:</strong> Isla Analia Elizabeth</p>
+                  <p style="margin: 5px 0;"><strong>CUIT/CUIL:</strong> 27-22539871-8</p>
+                </div>
+                <p style="color: #92400e; margin: 0; font-size: 14px; font-style: italic;">⚠️ <strong>IMPORTANTE:</strong> Una vez realizada la transferencia, contáctanos inmediatamente por WhatsApp con el comprobante.</p>
+              </div>
+              
+              <div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h3 style="color: #1f2937; margin: 0 0 15px 0; font-size: 18px;">📞 Contacto Urgente</h3>
+                <p style="color: #4b5563; margin: 0 0 10px 0;">Contáctanos ahora mismo por WhatsApp:</p>
+                <p style="color: #dc2626; margin: 0; font-weight: bold; font-size: 16px;">WhatsApp: +54 3548631824</p>
+              </div>
+              
+              <div style="text-align: center; padding: 20px; background-color: #fee2e2; border-radius: 10px; border: 2px solid #dc2626;">
+                <p style="color: #991b1b; margin: 0; font-size: 14px; font-weight: bold;">¡No esperes más! Realiza el depósito ahora para confirmar tu reserva.</p>
+              </div>
+            </div>
+          </div>
+        `
+      };
+  
+      const info = await this.sendMailWithFallback(mailOptions);
+      console.log('✅ Email de recordatorio enviado:', info.messageId);
+      return true;
+    } catch (error) {
+      console.error('❌ Error enviando email de recordatorio:', error);
+      return false;
+    }
   }
 }
 

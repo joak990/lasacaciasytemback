@@ -674,6 +674,82 @@ router.post('/', [
       console.log('🔔 Enviando notificaciones...');
       const notificationResult = await notificationService.notifyNewPlatformReservation(reservation, reservation.cabin);
       console.log('✅ Notificaciones enviadas:', notificationResult);
+      
+      // Programar envío de email de recordatorio a los 40 minutos
+      console.log('⏰ Programando email de recordatorio para 40 minutos...');
+      setTimeout(async () => {
+        try {
+          // Verificar que la reserva aún no esté confirmada
+          const updatedReservation = await prisma.reservation.findUnique({
+            where: { id: reservation.id },
+            include: { cabin: true }
+          });
+          
+          if (updatedReservation && updatedReservation.status !== 'CONFIRMED') {
+            console.log('📧 Enviando email de recordatorio para reserva:', reservation.id);
+            await notificationService.sendReminderEmail(updatedReservation, updatedReservation.cabin);
+            console.log('✅ Email de recordatorio enviado');
+          } else {
+            console.log('✅ Reserva ya confirmada, no se envía recordatorio');
+          }
+        } catch (reminderError) {
+          console.error('❌ Error enviando email de recordatorio:', reminderError);
+        }
+      }, 40 * 60 * 1000); // 40 minutos en milisegundos
+      
+      // Programar envío de email al admin a los 45 minutos
+      console.log('⏰ Programando email al admin para 45 minutos...');
+      setTimeout(async () => {
+        try {
+          const updatedReservation = await prisma.reservation.findUnique({
+            where: { id: reservation.id },
+            include: { cabin: true }
+          });
+          
+          if (updatedReservation && updatedReservation.status !== 'CONFIRMED') {
+            console.log('📧 Enviando email al admin sobre reserva próxima a vencer:', reservation.id);
+            await notificationService.sendAdminReminderEmail(updatedReservation, updatedReservation.cabin);
+            console.log('✅ Email al admin enviado');
+          }
+        } catch (adminReminderError) {
+          console.error('❌ Error enviando email al admin:', adminReminderError);
+        }
+      }, 45 * 60 * 1000); // 45 minutos en milisegundos
+      
+      // Programar cancelación automática a los 60 minutos (1 hora)
+      console.log('⏰ Programando cancelación automática para 60 minutos...');
+      setTimeout(async () => {
+        try {
+          const updatedReservation = await prisma.reservation.findUnique({
+            where: { id: reservation.id },
+            include: { cabin: true }
+          });
+          
+          if (updatedReservation && updatedReservation.status !== 'CONFIRMED') {
+            console.log('❌ Cancelando reserva automáticamente:', reservation.id);
+            
+            // Enviar email de cancelación al usuario
+            if (updatedReservation.guestEmail) {
+              await notificationService.sendCancellationEmail(updatedReservation, updatedReservation.cabin);
+            }
+            
+            // Enviar email de cancelación al admin
+            await notificationService.sendAdminCancellationEmail(updatedReservation, updatedReservation.cabin);
+            
+            // Eliminar la reserva de la base de datos
+            await prisma.reservation.delete({
+              where: { id: reservation.id }
+            });
+            
+            console.log('✅ Reserva cancelada y eliminada de la base de datos');
+          } else {
+            console.log('✅ Reserva ya confirmada, no se cancela');
+          }
+        } catch (cancellationError) {
+          console.error('❌ Error cancelando reserva:', cancellationError);
+        }
+      }, 60 * 60 * 1000); // 60 minutos (1 hora) en milisegundos
+      
     } catch (notificationError) {
       console.error('❌ Error enviando notificaciones:', notificationError);
       // No fallar la creación de la reserva si fallan las notificaciones
@@ -847,6 +923,81 @@ router.post('/platform', [
       console.log('🔔 Enviando notificaciones...');
       const notificationResult = await notificationService.notifyNewPlatformReservation(reservation, reservation.cabin);
       console.log('✅ Notificaciones enviadas:', notificationResult);
+      
+      // Programar envío de email de recordatorio a los 40 minutos
+      console.log('⏰ Programando email de recordatorio para 40 minutos...');
+      setTimeout(async () => {
+        try {
+          // Verificar que la reserva aún no esté confirmada
+          const updatedReservation = await prisma.reservation.findUnique({
+            where: { id: reservation.id },
+            include: { cabin: true }
+          });
+          
+          if (updatedReservation && updatedReservation.status !== 'CONFIRMED') {
+            console.log('📧 Enviando email de recordatorio para reserva:', reservation.id);
+            await notificationService.sendReminderEmail(updatedReservation, updatedReservation.cabin);
+            console.log('✅ Email de recordatorio enviado');
+          } else {
+            console.log('✅ Reserva ya confirmada, no se envía recordatorio');
+          }
+        } catch (reminderError) {
+          console.error('❌ Error enviando email de recordatorio:', reminderError);
+        }
+      }, 40 * 60 * 1000); // 40 minutos en milisegundos
+      
+      // Programar envío de email al admin a los 45 minutos
+      console.log('⏰ Programando email al admin para 45 minutos...');
+      setTimeout(async () => {
+        try {
+          const updatedReservation = await prisma.reservation.findUnique({
+            where: { id: reservation.id },
+            include: { cabin: true }
+          });
+          
+          if (updatedReservation && updatedReservation.status !== 'CONFIRMED') {
+            console.log('📧 Enviando email al admin sobre reserva próxima a vencer:', reservation.id);
+            await notificationService.sendAdminReminderEmail(updatedReservation, updatedReservation.cabin);
+            console.log('✅ Email al admin enviado');
+          }
+        } catch (adminReminderError) {
+          console.error('❌ Error enviando email al admin:', adminReminderError);
+        }
+      }, 45 * 60 * 1000); // 45 minutos en milisegundos
+      
+      // Programar cancelación automática a los 60 minutos (1 hora)
+      console.log('⏰ Programando cancelación automática para 60 minutos...');
+      setTimeout(async () => {
+        try {
+          const updatedReservation = await prisma.reservation.findUnique({
+            where: { id: reservation.id },
+            include: { cabin: true }
+          });
+          
+          if (updatedReservation && updatedReservation.status !== 'CONFIRMED') {
+            console.log('❌ Cancelando reserva automáticamente:', reservation.id);
+            
+            // Enviar email de cancelación al usuario
+            if (updatedReservation.guestEmail) {
+              await notificationService.sendCancellationEmail(updatedReservation, updatedReservation.cabin);
+            }
+            
+            // Enviar email de cancelación al admin
+            await notificationService.sendAdminCancellationEmail(updatedReservation, updatedReservation.cabin);
+            
+            // Eliminar la reserva de la base de datos
+            await prisma.reservation.delete({
+              where: { id: reservation.id }
+            });
+            
+            console.log('✅ Reserva cancelada y eliminada de la base de datos');
+          } else {
+            console.log('✅ Reserva ya confirmada, no se cancela');
+          }
+        } catch (cancellationError) {
+          console.error('❌ Error cancelando reserva:', cancellationError);
+        }
+      }, 60 * 60 * 1000); // 60 minutos (1 hora) en milisegundos
       
       res.status(201).json({
         message: 'Reservación creada exitosamente desde la plataforma web',
