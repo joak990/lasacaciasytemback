@@ -314,6 +314,10 @@ class NotificationService {
                   <td style="padding: 8px 0; color: #6b7280; font-weight: bold;">$${reservation.totalPrice}</td>
                 </tr>
                 <tr>
+                  <td style="padding: 8px 0; font-weight: bold; color: #374151;">Desayuno:</td>
+                  <td style="padding: 8px 0; color: #6b7280;">${reservation.isBreakfast ? '✅ Incluido' : '❌ No incluido'}</td>
+                </tr>
+                <tr>
                   <td style="padding: 8px 0; font-weight: bold; color: #374151;">Teléfono:</td>
                   <td style="padding: 8px 0; color: #6b7280;">${reservation.guestPhone}</td>
                 </tr>
@@ -649,30 +653,6 @@ class NotificationService {
         }
       }
       
-      // Construir sección del link de pre-checkin si existe
-      let preCheckInSection = '';
-      if (preCheckInLink && reservation.guestCount > 1) {
-        preCheckInSection = `
-              <!-- SECCIÓN DE PRE-CHECKIN -->
-              <div style="background-color: #dbeafe; border: 3px solid #3b82f6; padding: 25px; border-radius: 10px; margin-bottom: 30px; text-align: center;">
-                <div style="display: inline-flex; align-items: center; justify-content: center; background-color: #3b82f6; color: white; border-radius: 50%; width: 60px; height: 60px; margin-bottom: 15px;">
-                  <span style="font-size: 30px;">📝</span>
-                </div>
-                <h3 style="color: #1e40af; margin: 0 0 15px 0; font-size: 20px; font-weight: bold;">Completá los datos de tus huéspedes</h3>
-                <p style="color: #1e3a8a; margin: 0 0 20px 0; font-size: 16px; line-height: 1.5;">
-                  Para agilizar tu check-in, completá los datos de todos los huéspedes que viajarán contigo. 
-                  Solo necesitás el nombre, apellido, DNI y fecha de nacimiento de cada persona.
-                </p>
-                <a href="${preCheckInLink}" 
-                   style="display: inline-block; background-color: #3b82f6; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; margin-top: 10px;">
-                  Completar datos de huéspedes →
-                </a>
-                <p style="color: #64748b; margin: 15px 0 0 0; font-size: 12px; font-style: italic;">
-                  Este link es temporal y expira en 7 días
-                </p>
-              </div>
-        `;
-      }
       
       const mailOptions = {
         from: process.env.EMAIL_USER || 'lasacaciasrefugio@gmail.com',
@@ -710,8 +690,6 @@ class NotificationService {
                 <p><strong>Huéspedes:</strong> ${reservation.guestCount} personas</p>
                 <p><strong>Total a pagar:</strong> $${reservation.totalPrice}</p>
               </div>
-              
-              ${preCheckInSection}
               
               <div style="background-color: #fef3c7; border: 2px solid #f59e0b; padding: 25px; border-radius: 10px; margin-bottom: 30px;">
                 <h3 style="color: #92400e; margin: 0 0 20px 0; font-size: 20px;">💳 Datos para Transferencia Bancaria</h3>
