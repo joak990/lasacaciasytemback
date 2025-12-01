@@ -57,6 +57,7 @@ model Reservation {
   checkOutDone        Boolean              @default(false)
   channel             String?              @default("CALENDAR")
   preCheckInCompleted Boolean              @default(false) // Si completó el formulario de pre-checkin
+  isBreakfast         Boolean              @default(false) // Si incluye desayuno
   payments            Payment[]
   cabin               Cabin                @relation(fields: [cabinId], references: [id])
   user                User?                @relation(fields: [userId], references: [id])

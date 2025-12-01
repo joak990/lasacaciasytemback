@@ -720,7 +720,8 @@ router.post('/platform', [
       guestLastName,
       guestDNI,
       guestPhone,
-      guestEmail
+      guestEmail,
+      isBreakfast = false
     } = req.body;
 
     console.log('🔍 Datos de reserva desde plataforma:', {
@@ -823,7 +824,8 @@ router.post('/platform', [
         paymentStatus: 'PENDING',
         amountPaid: 0,
         paymentMethod: 'TRANSFER',
-        status: 'PENDING'
+        status: 'PENDING',
+        isBreakfast: isBreakfast === true || isBreakfast === 'true'
         // channel: 'PLATFORM' // Comentado temporalmente hasta que se haga la migración
       },
       include: {
