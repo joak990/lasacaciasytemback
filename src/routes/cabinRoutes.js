@@ -13,6 +13,40 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
+// Helper para parsear fechas en formato DD/MM/YYYY o ISO
+const parseDate = (dateString) => {
+  if (!dateString) return null;
+  
+  // Si es ISO format (YYYY-MM-DD), parsear manualmente para evitar problemas de zona horaria
+  if (dateString.includes('-')) {
+    const parts = dateString.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1; // JavaScript months are 0-indexed
+      const day = parseInt(parts[2], 10);
+      const date = new Date(year, month, day, 0, 0, 0, 0);
+      return date;
+    }
+  }
+  
+  // Si es DD/MM/YYYY, parsear manualmente
+  if (dateString.includes('/')) {
+    const parts = dateString.split('/');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1; // JavaScript months are 0-indexed
+      const year = parseInt(parts[2], 10);
+      const date = new Date(year, month, day, 0, 0, 0, 0);
+      return date;
+    }
+  }
+  
+  // Fallback: intentar parsear como está
+  const date = new Date(dateString);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
 // GET /api/cabins - Obtener todas las cabañas
 router.get('/', async (req, res) => {
   try {
@@ -57,13 +91,18 @@ router.get('/available', async (req, res) => {
       });
     }
 
-    // Parsear fechas
-    const checkInDate = new Date(checkIn);
-    const checkOutDate = new Date(checkOut);
+    // Parsear fechas usando helper
+    const checkInDate = parseDate(checkIn);
+    const checkOutDate = parseDate(checkOut);
 
-    if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+    if (!checkInDate || !checkOutDate || isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
       return res.status(400).json({ error: 'Fechas inválidas' });
     }
+
+    console.log('🔍 Fechas parseadas:', {
+      checkIn: checkInDate.toISOString().split('T')[0],
+      checkOut: checkOutDate.toISOString().split('T')[0]
+    });
 
     if (checkInDate >= checkOutDate) {
       return res.status(400).json({ 
@@ -127,43 +166,83 @@ router.get('/available', async (req, res) => {
           continue;
         }
 
-        // Calcular precio especial para las fechas solicitadas
-        let finalPrice = cabin.price; // Precio base por defecto
+        // Calcular precio día por día para las fechas solicitadas
+        let totalPrice = 0;
+        let averagePricePerNight = cabin.price;
         
-                 try {
-           // Buscar precios especiales que se apliquen a las fechas solicitadas usando SQL directo
-           const specialPricing = await prisma.$queryRaw`
-             SELECT * FROM "CabinPricing" 
-             WHERE "cabinId" = ${cabin.id}
-             AND "isActive" = true
-             AND "startDate" <= ${checkOutDate}
-             AND "endDate" >= ${checkInDate}
-             ORDER BY "priority" DESC
-           `;
+        try {
+          // Obtener la cabaña con sus precios especiales
+          const cabinWithPricing = await prisma.cabin.findUnique({
+            where: { id: cabin.id },
+            include: {
+              pricing: {
+                where: {
+                  isActive: true
+                },
+                orderBy: { priority: 'desc' }
+              }
+            }
+          });
 
-          if (specialPricing.length > 0) {
-            // Usar el precio especial con mayor prioridad
-            const bestPricing = specialPricing[0];
-            finalPrice = bestPricing.price;
-            console.log(`💰 Cabaña ${cabin.name} - Precio especial aplicado: $${finalPrice} (${bestPricing.priceType})`);
+          if (cabinWithPricing && cabinWithPricing.pricing.length > 0) {
+            // Calcular precio día por día
+            const nights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+            totalPrice = 0;
+
+            for (let i = 0; i < nights; i++) {
+              const currentDate = new Date(checkInDate);
+              currentDate.setDate(currentDate.getDate() + i);
+              currentDate.setHours(0, 0, 0, 0); // Normalizar a medianoche
+              
+              console.log(`🔍 Día ${i + 1}: ${currentDate.toISOString().split('T')[0]}`);
+              
+              // Buscar precio específico para esta fecha (con mayor prioridad primero)
+              const specificPricing = cabinWithPricing.pricing.find(p => {
+                const pStartDate = new Date(p.startDate);
+                const pEndDate = new Date(p.endDate);
+                pStartDate.setHours(0, 0, 0, 0);
+                pEndDate.setHours(0, 0, 0, 0);
+                
+                // Rango exclusivo en el final: startDate <= currentDate < endDate
+                const matches = currentDate >= pStartDate && currentDate < pEndDate;
+                if (matches) {
+                  console.log(`  ✅ Coincide con precio especial: $${p.price} (${p.priceType}, prioridad: ${p.priority})`);
+                }
+                return matches;
+              });
+              
+              const dayPrice = specificPricing ? specificPricing.price : cabin.price;
+              console.log(`  💰 Precio del día: $${dayPrice} ${specificPricing ? '(especial)' : '(base)'}`);
+              totalPrice += dayPrice;
+            }
+
+            averagePricePerNight = Math.round((totalPrice / nights) * 100) / 100;
+            console.log(`💰 Cabaña ${cabin.name} - Precio calculado día por día: Total $${totalPrice}, Promedio $${averagePricePerNight}/noche`);
           } else {
-            console.log(`💰 Cabaña ${cabin.name} - Usando precio base: $${finalPrice}`);
+            // Si no hay precios especiales, usar precio base
+            const nights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+            totalPrice = cabin.price * nights;
+            averagePricePerNight = cabin.price;
+            console.log(`💰 Cabaña ${cabin.name} - Usando precio base: $${averagePricePerNight}/noche`);
           }
         } catch (pricingError) {
-          console.error(`❌ Error calculando precio especial para ${cabin.name}:`, pricingError);
+          console.error(`❌ Error calculando precio para ${cabin.name}:`, pricingError);
           // En caso de error, usar precio base
-          finalPrice = cabin.price;
+          const nights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
+          totalPrice = cabin.price * nights;
+          averagePricePerNight = cabin.price;
         }
 
         // Agregar la cabaña con el precio calculado
         const cabinWithPricing = {
           ...cabin,
-          price: finalPrice,
+          price: averagePricePerNight,
+          totalPrice: totalPrice,
           originalPrice: cabin.price // Mantener el precio original para referencia
         };
 
         availableCabins.push(cabinWithPricing);
-        console.log(`✅ Cabaña ${cabin.name} disponible - Precio final: $${finalPrice}`);
+        console.log(`✅ Cabaña ${cabin.name} disponible - Precio promedio: $${averagePricePerNight}/noche`);
       } else {
         console.log(`❌ Cabaña ${cabin.name} no disponible - Conflicto encontrado`);
       }

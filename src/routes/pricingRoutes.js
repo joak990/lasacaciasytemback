@@ -53,8 +53,7 @@ async function findConflictingPricing(cabinId, startDate, endDate) {
       WHERE "cabinId" = ${cabinId} 
       AND "isActive" = true
       AND (
-        ("startDate" <= ${startDate} AND "endDate" >= ${startDate}) OR
-        ("startDate" <= ${endDate} AND "endDate" >= ${endDate})
+        ("startDate" < ${endDate} AND "endDate" > ${startDate})
       )
     `;
     return conflicts.length > 0 ? conflicts[0] : null;
@@ -297,14 +296,16 @@ router.get('/calculate', async (req, res) => {
 
     const { totalPrice, specialPrice } = await calculateCabinPriceWithSpecial(cabinId, new Date(checkIn), new Date(checkOut));
     const nights = Math.ceil((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24));
+    const averagePricePerNight = Math.round((totalPrice / nights) * 100) / 100;
     
     res.json({ 
       cabinId,
       checkIn,
       checkOut,
       totalPrice: totalPrice,
-      pricePerNight: specialPrice || totalPrice / nights,
-      specialPrice: specialPrice
+      averagePricePerNight: averagePricePerNight,
+      specialPrice: specialPrice,
+      nights: nights
     });
   } catch (error) {
     console.error('Error calculando precio:', error);
@@ -334,7 +335,7 @@ async function calculateCabinPriceWithSpecial(cabinId, checkIn, checkOut) {
   console.log('🔍 Precios especiales disponibles:', cabin.pricing.length);
 
   let totalPrice = 0;
-  let specialPrice = null;
+  let specialPrices = []; // Guardar todos los precios especiales encontrados
   const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
   
   console.log('🔍 Noches a calcular:', nights);
@@ -342,7 +343,9 @@ async function calculateCabinPriceWithSpecial(cabinId, checkIn, checkOut) {
   // Si no hay precios específicos, usar precio base
   if (cabin.pricing.length === 0) {
     console.log('⚠️ No hay precios especiales, usando precio base');
-    return { totalPrice: cabin.price * nights, specialPrice: null };
+    const totalPrice = cabin.price * nights;
+    const roundedTotalPrice = Math.round(totalPrice * 100) / 100;
+    return { totalPrice: roundedTotalPrice, specialPrice: null };
   }
 
   // Calcular precio día por día
@@ -353,103 +356,41 @@ async function calculateCabinPriceWithSpecial(cabinId, checkIn, checkOut) {
     
     console.log(`🔍 Día ${i + 1}: ${currentDate.toISOString().split('T')[0]}`);
     
-    // Buscar precio específico para esta fecha
+    // Buscar precio específico para esta fecha (con mayor prioridad primero)
     const specificPricing = cabin.pricing.find(p => {
       const pStartDate = new Date(p.startDate);
       const pEndDate = new Date(p.endDate);
       pStartDate.setHours(0, 0, 0, 0);
       pEndDate.setHours(0, 0, 0, 0);
       
-      const matches = currentDate >= pStartDate && currentDate <= pEndDate;
+      // Rango exclusivo en el final: startDate <= currentDate < endDate
+      const matches = currentDate >= pStartDate && currentDate < pEndDate;
       if (matches) {
-        console.log(`  ✅ Coincide con precio especial: $${p.price} (${p.priceType})`);
+        console.log(`  ✅ Coincide con precio especial: $${p.price} (${p.priceType}, prioridad: ${p.priority})`);
       }
       return matches;
     });
     
     const dayPrice = specificPricing ? specificPricing.price : cabin.price;
-    console.log(`  💰 Precio del día: $${dayPrice}`);
+    console.log(`  💰 Precio del día: $${dayPrice} ${specificPricing ? '(especial)' : '(base)'}`);
     
-    // Guardar el precio especial (si existe)
-    if (specificPricing && !specialPrice) {
-      specialPrice = specificPricing.price;
-      console.log(`  🔍 Guardando specialPrice: $${specialPrice}`);
+    // Guardar todos los precios especiales encontrados (sin duplicados)
+    if (specificPricing && !specialPrices.find(sp => sp.price === specificPricing.price)) {
+      specialPrices.push({
+        price: specificPricing.price,
+        type: specificPricing.priceType,
+        priority: specificPricing.priority
+      });
     }
-    totalPrice += dayPrice;
-  }
-
-  // Redondear precios a 2 decimales para evitar errores de punto flotante
-  const roundedTotalPrice = Math.round(totalPrice * 100) / 100;
-  const roundedSpecialPrice = specialPrice ? Math.round(specialPrice * 100) / 100 : null;
-  
-  console.log('✅ Resultado final:', { totalPrice: roundedTotalPrice, specialPrice: roundedSpecialPrice });
-  return { totalPrice: roundedTotalPrice, specialPrice: roundedSpecialPrice };
-}
-
-// Función auxiliar para calcular precio
-async function calculateCabinPrice(cabinId, checkIn, checkOut) {
-  console.log('🔍 calculateCabinPrice - Parámetros:', { cabinId, checkIn, checkOut });
-  
-  const cabin = await prisma.cabin.findUnique({
-    where: { id: cabinId },
-    include: {
-      pricing: {
-        where: {
-          isActive: true
-        },
-        orderBy: { priority: 'desc' }
-      }
-    }
-  });
-
-  if (!cabin) throw new Error('Cabaña no encontrada');
-
-  console.log('🔍 Cabaña encontrada:', { id: cabin.id, name: cabin.name, basePrice: cabin.price });
-  console.log('🔍 Precios especiales disponibles:', cabin.pricing.length);
-
-  let totalPrice = 0;
-  const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
-  
-  console.log('🔍 Noches a calcular:', nights);
-  
-  // Si no hay precios específicos, usar precio base
-  if (cabin.pricing.length === 0) {
-    console.log('⚠️ No hay precios especiales, usando precio base');
-    return cabin.price * nights;
-  }
-
-  // Calcular precio día por día
-  for (let i = 0; i < nights; i++) {
-    const currentDate = new Date(checkIn);
-    currentDate.setDate(currentDate.getDate() + i);
-    currentDate.setHours(0, 0, 0, 0); // Normalizar a medianoche
-    
-    console.log(`🔍 Día ${i + 1}: ${currentDate.toISOString().split('T')[0]}`);
-    
-    // Buscar precio específico para esta fecha
-    const specificPricing = cabin.pricing.find(p => {
-      const pStartDate = new Date(p.startDate);
-      const pEndDate = new Date(p.endDate);
-      pStartDate.setHours(0, 0, 0, 0);
-      pEndDate.setHours(0, 0, 0, 0);
-      
-      const matches = currentDate >= pStartDate && currentDate <= pEndDate;
-      if (matches) {
-        console.log(`  ✅ Coincide con precio especial: $${p.price} (${p.priceType})`);
-      }
-      return matches;
-    });
-    
-    const dayPrice = specificPricing ? specificPricing.price : cabin.price;
-    console.log(`  💰 Precio del día: $${dayPrice}`);
     totalPrice += dayPrice;
   }
 
   // Redondear precio a 2 decimales para evitar errores de punto flotante
   const roundedTotalPrice = Math.round(totalPrice * 100) / 100;
+  const specialPrice = specialPrices.length > 0 ? Math.round(specialPrices[0].price * 100) / 100 : null;
   
-  console.log('✅ Precio total calculado:', roundedTotalPrice);
-  return roundedTotalPrice;
+  console.log('✅ Precio total calculado:', roundedTotalPrice, 'con', specialPrices.length, 'precios especiales encontrados');
+  return { totalPrice: roundedTotalPrice, specialPrice };
 }
 
 module.exports = router;
