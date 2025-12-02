@@ -87,7 +87,13 @@ router.get('/cabin/:cabinId', async (req, res) => {
     // Usar función temporal con SQL directo
     const pricing = await getCabinPricing(cabinId);
     
-    res.json(pricing);
+    // Redondear precios a 2 decimales para evitar errores de punto flotante
+    const pricingWithRoundedPrices = pricing.map(p => ({
+      ...p,
+      price: Math.round(p.price * 100) / 100
+    }));
+    
+    res.json(pricingWithRoundedPrices);
   } catch (error) {
     console.error('Error obteniendo precios:', error);
     res.status(500).json({ error: 'Error al obtener precios' });
@@ -241,8 +247,14 @@ router.put('/:id', [
       return res.status(404).json({ error: 'Precio no encontrado' });
     }
 
-    console.log('✅ Precio actualizado:', result[0]);
-    res.json(result[0]);
+    // Redondear precio a 2 decimales para evitar errores de punto flotante
+    const updatedPricing = {
+      ...result[0],
+      price: Math.round(result[0].price * 100) / 100
+    };
+
+    console.log('✅ Precio actualizado:', updatedPricing);
+    res.json(updatedPricing);
   } catch (error) {
     console.error('❌ Error actualizando precio:', error);
     res.status(500).json({ error: 'Error al actualizar precio' });
@@ -366,8 +378,12 @@ async function calculateCabinPriceWithSpecial(cabinId, checkIn, checkOut) {
     totalPrice += dayPrice;
   }
 
-  console.log('✅ Resultado final:', { totalPrice, specialPrice });
-  return { totalPrice, specialPrice };
+  // Redondear precios a 2 decimales para evitar errores de punto flotante
+  const roundedTotalPrice = Math.round(totalPrice * 100) / 100;
+  const roundedSpecialPrice = specialPrice ? Math.round(specialPrice * 100) / 100 : null;
+  
+  console.log('✅ Resultado final:', { totalPrice: roundedTotalPrice, specialPrice: roundedSpecialPrice });
+  return { totalPrice: roundedTotalPrice, specialPrice: roundedSpecialPrice };
 }
 
 // Función auxiliar para calcular precio
@@ -429,8 +445,11 @@ async function calculateCabinPrice(cabinId, checkIn, checkOut) {
     totalPrice += dayPrice;
   }
 
-  console.log('✅ Precio total calculado:', totalPrice);
-  return totalPrice;
+  // Redondear precio a 2 decimales para evitar errores de punto flotante
+  const roundedTotalPrice = Math.round(totalPrice * 100) / 100;
+  
+  console.log('✅ Precio total calculado:', roundedTotalPrice);
+  return roundedTotalPrice;
 }
 
 module.exports = router;
