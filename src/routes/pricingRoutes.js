@@ -64,6 +64,12 @@ async function findConflictingPricing(cabinId, startDate, endDate) {
   }
 }
 
+// Función auxiliar para parsear fechas correctamente
+const parseDate = (dateString) => {
+  const [year, month, day] = dateString.split('-');
+  return new Date(year, parseInt(month) - 1, day, 0, 0, 0);
+};
+
 // Middleware para manejar errores de validación
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
@@ -116,7 +122,14 @@ router.post('/', [
       select: {
         id: true,
         name: true,
-        price: true
+        price: true,
+        capacity: true,
+        pricing: {
+          where: {
+            isActive: true
+          },
+          orderBy: { priority: 'desc' }
+        }
       }
     });
     
@@ -124,8 +137,7 @@ router.post('/', [
       return res.status(404).json({ error: 'Cabaña no encontrada' });
     }
 
-    // Verificar conflictos de fechas usando SQL directo
-    const conflictingPricing = await findConflictingPricing(cabinId, new Date(startDate), new Date(endDate));
+    const conflictingPricing = await findConflictingPricing(cabinId, parseDate(startDate), parseDate(endDate));
 
     if (conflictingPricing) {
       return res.status(400).json({ 
@@ -134,12 +146,6 @@ router.post('/', [
     }
 
     // Crear precio usando SQL directo
-    // Convertir fechas correctamente: "2026-02-13" → 2026-02-13 00:00:00 (sin cambio de zona horaria)
-    const parseDate = (dateString) => {
-      const [year, month, day] = dateString.split('-');
-      return new Date(year, parseInt(month) - 1, day, 0, 0, 0);
-    };
-
     await createCabinPricing({
       cabinId,
       startDate: parseDate(startDate),
@@ -192,18 +198,10 @@ router.put('/:id', [
     }
     if (updateData.startDate !== undefined) {
       setClauses.push(`"startDate" = $${values.length + 1}`);
-      const parseDate = (dateString) => {
-        const [year, month, day] = dateString.split('-');
-        return new Date(year, parseInt(month) - 1, day, 0, 0, 0);
-      };
       values.push(parseDate(updateData.startDate));
     }
     if (updateData.endDate !== undefined) {
       setClauses.push(`"endDate" = $${values.length + 1}`);
-      const parseDate = (dateString) => {
-        const [year, month, day] = dateString.split('-');
-        return new Date(year, parseInt(month) - 1, day, 0, 0, 0);
-      };
       values.push(parseDate(updateData.endDate));
     }
     if (updateData.priceType !== undefined) {
