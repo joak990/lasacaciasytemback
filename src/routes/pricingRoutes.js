@@ -134,10 +134,16 @@ router.post('/', [
     }
 
     // Crear precio usando SQL directo
+    // Convertir fechas correctamente: "2026-02-13" → 2026-02-13 00:00:00 (sin cambio de zona horaria)
+    const parseDate = (dateString) => {
+      const [year, month, day] = dateString.split('-');
+      return new Date(year, parseInt(month) - 1, day, 0, 0, 0);
+    };
+
     await createCabinPricing({
       cabinId,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
+      startDate: parseDate(startDate),
+      endDate: parseDate(endDate),
       price: parseFloat(price),
       priceType,
       description: description || null,
@@ -186,11 +192,19 @@ router.put('/:id', [
     }
     if (updateData.startDate !== undefined) {
       setClauses.push(`"startDate" = $${values.length + 1}`);
-      values.push(new Date(updateData.startDate));
+      const parseDate = (dateString) => {
+        const [year, month, day] = dateString.split('-');
+        return new Date(year, parseInt(month) - 1, day, 0, 0, 0);
+      };
+      values.push(parseDate(updateData.startDate));
     }
     if (updateData.endDate !== undefined) {
       setClauses.push(`"endDate" = $${values.length + 1}`);
-      values.push(new Date(updateData.endDate));
+      const parseDate = (dateString) => {
+        const [year, month, day] = dateString.split('-');
+        return new Date(year, parseInt(month) - 1, day, 0, 0, 0);
+      };
+      values.push(parseDate(updateData.endDate));
     }
     if (updateData.priceType !== undefined) {
       setClauses.push(`"priceType" = $${values.length + 1}::"CabinPriceType"`);
