@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult, query } = require('express-validator');
 const prisma = require('../utils/prisma');
 const notificationService = require('../services/notificationService');
+const { calculateCabinPriceWithSpecial } = require('./pricingRoutes');
 
 const router = express.Router();
 
@@ -478,7 +479,9 @@ router.post('/', [
       guestPhone,
       guestEmail,
       amountPaid = 0,
-      paymentMethod = 'TRANSFER'
+      paymentMethod = 'TRANSFER',
+      isBreakfast = false,
+      breakfastPeople = 0
     } = req.body;
 
     console.log('🔍 Datos parseados:', {
@@ -610,13 +613,26 @@ router.post('/', [
     console.log('🔒 Validando precio de la reserva...');
     console.log('🔒 Precio enviado desde frontend:', totalPrice);
     console.log('🔒 Precio real de la cabaña:', cabin.price);
+    console.log('🔒 Desayuno incluido:', isBreakfast);
     
-    // Calcular el precio real basado en las noches
+    // Calcular el precio real usando la función de precios especiales
     const nights = Math.ceil((checkOutDate - checkInDate) / (1000 * 60 * 60 * 24));
-    const expectedTotalPrice = cabin.price * nights;
+    
+    // Usar la función calculateCabinPriceWithSpecial para obtener el precio correcto con precios especiales
+    const { totalPrice: calculatedCabinPrice } = await calculateCabinPriceWithSpecial(cabinId, checkInDate, checkOutDate);
+    
+    let expectedTotalPrice = calculatedCabinPrice;
+    
+    // Si incluye desayuno, sumar $5,000 por persona (breakfastPeople)
+    if (isBreakfast && breakfastPeople > 0) {
+      const breakfastPrice = breakfastPeople * 5000;
+      expectedTotalPrice += breakfastPrice;
+      console.log('🔒 Desayuno agregado:', breakfastPrice, '(', breakfastPeople, 'personas × $5,000)');
+    }
     
     console.log('🔒 Noches calculadas:', nights);
-    console.log('🔒 Precio esperado:', expectedTotalPrice);
+    console.log('🔒 Precio de cabaña (con especiales):', calculatedCabinPrice);
+    console.log('🔒 Precio esperado total:', expectedTotalPrice);
     
     // Permitir una pequeña diferencia por redondeo (máximo 5 pesos)
     const priceDifference = Math.abs(parseFloat(totalPrice) - expectedTotalPrice);
@@ -628,8 +644,11 @@ router.post('/', [
         details: {
           sentPrice: parseFloat(totalPrice),
           expectedPrice: expectedTotalPrice,
-          cabinPrice: cabin.price,
-          nights: nights
+          cabinBasePrice: cabin.price,
+          cabinPriceWithSpecials: calculatedCabinPrice,
+          nights: nights,
+          isBreakfast: isBreakfast,
+          breakfastPeople: breakfastPeople
         }
       });
     }
@@ -653,7 +672,8 @@ router.post('/', [
         paymentStatus: 'PENDING',
         amountPaid: parseFloat(amountPaid),
         paymentMethod,
-        status: 'PENDING'
+        status: 'PENDING',
+        isBreakfast: isBreakfast
       },
       include: {
         cabin: {
