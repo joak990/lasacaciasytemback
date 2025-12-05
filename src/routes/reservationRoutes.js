@@ -1052,15 +1052,19 @@ router.post('/platform', [
 router.put('/:id', [
   body('status').optional().isIn(['PENDING', 'CONFIRMED', 'CANCELLED', 'COMPLETED']),
   body('specialRequests').optional().trim(),
+  body('totalPrice').optional().isFloat({ min: 0 }),
   handleValidationErrors
 ], async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, specialRequests } = req.body;
+    const { status, specialRequests, totalPrice } = req.body;
 
     const updateData = {};
     if (status) updateData.status = status;
     if (specialRequests !== undefined) updateData.specialRequests = specialRequests;
+    if (totalPrice !== undefined) updateData.totalPrice = parseFloat(totalPrice);
+
+    console.log('💾 Actualizando reservación:', { id, updateData });
 
     const updatedReservation = await prisma.reservation.update({
       where: { id },
@@ -1087,6 +1091,8 @@ router.put('/:id', [
         }
       }
     });
+
+    console.log('✅ Reservación actualizada:', { id, totalPrice: updatedReservation.totalPrice });
 
     res.json({
       message: 'Reservación actualizada exitosamente',
